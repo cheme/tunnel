@@ -21,7 +21,6 @@ use bincode::rustc_serialize::{
   decode_from as bin_decode, 
 };
 use mydht_base::peer::Peer;
-use mydht_base::keyval::KeyVal;
 use std::io::{
   Write,
   Read,
@@ -72,7 +71,7 @@ pub enum MultipleReplyMode {
 #[derive(RustcDecodable,RustcEncodable,Debug,Clone)]
 pub enum MultipleReplyInfo<P : Peer> {
   NoHandling,
-  KnownDest(<P as KeyVal>::Key), // TODO add reply mode ?? TODO address instead of key??
+  KnownDest(<P as Peer>::Address), // TODO add reply mode ?? TODO address instead of key??
   Route, // route headers are to be read afterward, contains sym key
   /// reply info include in route after content
   RouteReply(Vec<u8>), // route headers are to be read afterward, contains sym key
@@ -204,7 +203,7 @@ impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> ReplyProvider<P, MultipleReplyI
        MultipleReplyMode::NoHandling => vec![MultipleReplyInfo::NoHandling;l-1],
        MultipleReplyMode::KnownDest => {
          let mut res = vec![MultipleReplyInfo::NoHandling;l-1];
-         res[l-2] = MultipleReplyInfo::KnownDest(route[0].get_key());
+         res[l-2] = MultipleReplyInfo::KnownDest(route[0].to_address());
          res
        },
        MultipleReplyMode::OtherRoute => {

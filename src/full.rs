@@ -88,7 +88,6 @@ use std::marker::PhantomData;
 
 
 
-
 /// Generic Tunnel Traits, use as a traits container for a generic tunnel implementation
 /// (to reduce number of trait parameter), it is mainly here to reduce number of visible trait
 /// parameters in code, 
