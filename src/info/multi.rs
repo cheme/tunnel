@@ -170,7 +170,7 @@ impl<P : Peer> RepInfo for MultipleReplyInfo<P> {
 }
 
 /// TODO E as explicit limiter named trait for readability
-pub struct ReplyInfoProvider<P : Peer, SSW,SSR, SP : SymProvider<SSW,SSR,P>> {
+pub struct ReplyInfoProvider<P : Peer,SSW,SSR, SP : SymProvider<SSW,SSR>> {
   pub mode : MultipleReplyMode,
   // for different reply route
   pub symprov : SP,
@@ -178,11 +178,11 @@ pub struct ReplyInfoProvider<P : Peer, SSW,SSR, SP : SymProvider<SSW,SSR,P>> {
 }
 
 /// TODO macro inherit??
-impl<P : Peer, SSW,SSR,SP : SymProvider<SSW,SSR,P>> SymProvider<SSW,SSR,P> for ReplyInfoProvider<P,SSW,SSR,SP> {
+impl<P:Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> SymProvider<SSW,SSR> for ReplyInfoProvider<P,SSW,SSR,SP> {
 
   #[inline]
-  fn new_sym_key (&mut self, p : &P) -> Vec<u8> {
-    self.symprov.new_sym_key(p)
+  fn new_sym_key (&mut self) -> Vec<u8> {
+    self.symprov.new_sym_key()
   }
   #[inline]
   fn new_sym_writer (&mut self, k : Vec<u8>) -> SSW {
@@ -195,7 +195,7 @@ impl<P : Peer, SSW,SSR,SP : SymProvider<SSW,SSR,P>> SymProvider<SSW,SSR,P> for R
 
 }
 
-impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR,P>> ReplyProvider<P, MultipleReplyInfo<P>,SSW,SSR> for ReplyInfoProvider<P,SSW,SSR,SP> {
+impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> ReplyProvider<P, MultipleReplyInfo<P>,SSW,SSR> for ReplyInfoProvider<P,SSW,SSR,SP> {
 
   /// Error infos bases for peers
   fn new_reply (&mut self, route : &[&P]) -> Vec<MultipleReplyInfo<P>> {
@@ -223,14 +223,14 @@ impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR,P>> ReplyProvider<P, MultipleRepl
        MultipleReplyMode::RouteReply => {
          let mut res : Vec<MultipleReplyInfo<P>> = Vec::with_capacity(l-1);
          for i in 1..l {
-           res.push(MultipleReplyInfo::RouteReply(self.new_sym_key(route[i])))
+           res.push(MultipleReplyInfo::RouteReply(self.new_sym_key()))
          }
          res
        },
        MultipleReplyMode::CachedRoute => {
          let mut res : Vec<MultipleReplyInfo<P>> = Vec::with_capacity(l-1);
          for i in 1..l {
-           res.push(MultipleReplyInfo::CachedRoute(self.new_sym_key(route[i])))
+           res.push(MultipleReplyInfo::CachedRoute(self.new_sym_key()))
          }
          res
        },
@@ -285,8 +285,8 @@ impl<P : Peer,SSW,SSR> ReplyProvider<P, MultipleReplyInfo<P>,SSW,SSR> for NoMult
   }
 }
 
-impl<P : Peer, SSW,SSR> SymProvider<SSW,SSR,P> for NoMultiRepProvider {
-  fn new_sym_key (&mut self, _ : &P) -> Vec<u8> {
+impl<SSW,SSR> SymProvider<SSW,SSR> for NoMultiRepProvider {
+  fn new_sym_key (&mut self) -> Vec<u8> {
     unimplemented!()
   }
   fn new_sym_writer (&mut self, _ : Vec<u8>) -> SSW {

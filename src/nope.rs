@@ -211,9 +211,9 @@ impl<SSW,SSR> TunnelCache<SSW,SSR> for Nope {
   }
 }
 // TODO remove as only for dev progress
-impl<SSW,SSR,P> SymProvider<SSW,SSR,P> for Nope {
+impl<SSW,SSR> SymProvider<SSW,SSR> for Nope {
 
-  fn new_sym_key (&mut self, _ : &P) -> Vec<u8> {
+  fn new_sym_key (&mut self) -> Vec<u8> {
     panic!("Should only be use for dev");
   }
   fn new_sym_writer (&mut self, _ : Vec<u8>) -> SSW {

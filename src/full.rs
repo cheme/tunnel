@@ -29,8 +29,8 @@ use std::io::{
   Error as IoError,
   ErrorKind as IoErrorKind,
 };
-use mydht_base::keyval::KeyVal; // Trait actually use TODO find pragma for it
-use mydht_base::kvcache::Cache; // Trait actually use TODO find pragma for it
+use mydht_base::keyval::KeyVal;
+use mydht_base::kvcache::Cache;
 use mydht_base::peer::Peer;
 use bincode::SizeLimit;
 use bincode::rustc_serialize::{

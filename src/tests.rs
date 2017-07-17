@@ -13,7 +13,7 @@ use mydht_base::peer::{
   ShadowSim,
 };
 use std::marker::PhantomData;
-use mydht_base::tunnel_new::{
+use super::{
   TunnelCache,
   TunnelCacheErr,
   RouteProvider,
@@ -27,8 +27,8 @@ use mydht_base::tunnel_new::{
   TunnelErrorWriter,
   TunnelReaderExt,
 };
-use mydht_base::tunnel_new::nope::{Nope,TunnelNope};
-use mydht_base::tunnel_new::full::{
+use super::nope::{Nope,TunnelNope};
+use super::full::{
   ErrorWriter,
   Full,
   DestFull,
@@ -41,13 +41,13 @@ use mydht_base::tunnel_new::full::{
   TunnelCachedReaderExtClone,
   FullW,
 };
-use mydht_base::tunnel_new::info::multi::{
+use super::info::multi::{
   MultipleReplyMode,
   ReplyInfoProvider,
   MultipleReplyInfo,
   NoMultiRepProvider,
 };
-use mydht_base::tunnel_new::info::error::{
+use super::info::error::{
   MultipleErrorInfo,
   MultipleErrorMode,
   MulErrorProvider,
@@ -295,8 +295,8 @@ impl ExtRead for SRead {
   }
 }
 
-impl<P : Peer> SymProvider<SWrite,SRead,P> for SProv {
-  fn new_sym_key (&mut self, p : &P) -> Vec<u8> {
+impl SymProvider<SWrite,SRead> for SProv {
+  fn new_sym_key (&mut self) -> Vec<u8> {
     ShadowTest::shadow_simkey()
   }
   // TODO peerkey at 0??

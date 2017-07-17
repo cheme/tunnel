@@ -7,7 +7,6 @@ extern crate mydht_base;
 extern crate bincode;
 extern crate rand;
 use rustc_serialize::{Encodable, Decodable};
-use std::fmt;
 use std::cell::BorrowMutError;
 use std::cell::BorrowError;
 use std::marker::PhantomData;
@@ -114,7 +113,7 @@ pub trait ErrorProvider<P : Peer, EI : Info> {
   fn new_error_route (&mut self, &[&P]) -> Vec<EI>;
 }
 /// Reply info vec do not contain origin (start at index one of route)
-pub trait ReplyProvider<P : Peer, RI : RepInfo,SSW,SSR> : SymProvider<SSW,SSR,P> {
+pub trait ReplyProvider<P : Peer, RI : RepInfo,SSW,SSR> : SymProvider<SSW,SSR> {
   /// reply info for dest (last in vec) is different from hop reply info : TODO add new associated type (cf
   /// RepInfo) to avoid mandatory enum on RI.
   /// Last param is dest symetric key to use for reply (could change)
@@ -383,8 +382,9 @@ pub trait TunnelCacheErr<EW,EI> {
 
 /// TODO move with generic traits from full (should not be tunnel main module component
 /// TODO add Peer as param ? old impl got its w/r from peer
-pub trait SymProvider<SSW,SSR,P> {
-  fn new_sym_key (&mut self, &P) -> Vec<u8>;
+/// Sym provider is Peer 
+pub trait SymProvider<SSW,SSR> {
+  fn new_sym_key (&mut self) -> Vec<u8>;
   fn new_sym_writer (&mut self, Vec<u8>) -> SSW;
   fn new_sym_reader (&mut self, Vec<u8>) -> SSR;
 }

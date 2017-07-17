@@ -4,8 +4,6 @@ name = "tunnel"
 version = "0.0.1"
 authors = ["Emeric Chevalier <emericchevalier.pro@gmail.com>"]
 
-[feature]
-nightly = []
 
 [dependencies]
 log = "0.3.4"
