@@ -1,8 +1,4 @@
 extern crate mydht_basetest;
-use std::rc::Rc;
-use std::cmp;
-use std::cell::RefCell;
-use rand::ThreadRng;
 use rand::thread_rng;
 use rand::Rng;
 
@@ -10,7 +6,6 @@ use std::io::{Error, ErrorKind};
 use mydht_base::peer::{
   Peer,
   Shadow,
-  ShadowSim,
 };
 use std::marker::PhantomData;
 use super::{
@@ -18,7 +13,6 @@ use super::{
   TunnelCacheErr,
   RouteProvider,
   SymProvider,
-  ReplyProvider,
   TunnelNoRep,
   TunnelReaderNoRep,
   CacheIdProducer,
@@ -34,9 +28,6 @@ use super::full::{
   DestFull,
   FullR,
   GenTunnelTraits,
-  TunnelCachedWriterExt,
-  TunnelCachedReaderExt,
-
   TunnelCachedWriterExtClone,
   TunnelCachedReaderExtClone,
   FullW,
@@ -45,7 +36,6 @@ use super::info::multi::{
   MultipleReplyMode,
   ReplyInfoProvider,
   MultipleReplyInfo,
-  NoMultiRepProvider,
 };
 use super::info::error::{
   MultipleErrorInfo,
@@ -53,7 +43,6 @@ use super::info::error::{
   MulErrorProvider,
   NoErrorProvider,
 };
-use std::collections::HashMap;
 use std::io::{
   Write,
   Read,
@@ -66,7 +55,6 @@ use readwrite_comp::{
   ExtRead,
   ExtWrite,
   CompW,
-  CompR,
 };
 use self::mydht_basetest::peer::{
   PeerTest,
@@ -388,10 +376,10 @@ fn new_reply_route_1<P : Clone> (base : &[P], l : usize, dest : &P) -> Vec<P> {
 
 
 impl<P : Peer> RouteProvider<P> for SingleRp<P> {
-  fn new_route (&mut self, dest : &P) -> Vec<&P> {
+  fn new_route (&mut self, _ : &P) -> Vec<&P> {
       self.0.iter().collect()
   }
-  fn new_reply_route (&mut self, dest : &P) -> Vec<&P> {
+  fn new_reply_route (&mut self, _ : &P) -> Vec<&P> {
       self.0.iter().rev().collect()
   }
 }
@@ -468,28 +456,23 @@ fn new_full_tunnel<P : Peer> (tc : &TunnelTestConfig<P>, from : &P, ixcache : us
                           -> Full<TestTunnelTraits<P>>
 where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 {
-  let mut route_prov = Rp::new (tc.nbpeer,tc.route1.clone(),tc.route2.clone());
-  let mut cache : CachedInfoManager<P> = CachedInfoManager(Vec::new(),0,ixcache,Vec::new(),0,Vec::new(),0,Vec::new(),0);
+  let route_prov = Rp::new (tc.nbpeer,tc.route1.clone(),tc.route2.clone());
+  let cache : CachedInfoManager<P> = CachedInfoManager(Vec::new(),0,ixcache,Vec::new(),0,Vec::new(),0,Vec::new(),0);
   let TunnelTestConfig {
     me : _,
-    dest : dest,
-    nbpeer : nbpeer,
-    route1 : route1,
-    route2 : route2,
-    input_length : input_length,
-    write_buffer_length : write_buffer_length,
-    read_buffer_length : read_buffer_length,
-    reply_mode : reply_mode,
-    error_mode : error_mode,
-    error_position : error_position,
-    test_mode : test_mode,
+    dest,
+    nbpeer : _,
+    route1 : _,
+    route2 : _,
+    input_length : _,
+    write_buffer_length : _,
+    read_buffer_length : _,
+    reply_mode,
+    error_mode,
+    error_position : _,
+    test_mode : _,
   } = tc.clone();
 
-  let route_rep : Vec<P> = match reply_mode {
-    MultipleReplyMode::OtherRoute => new_reply_route_1 (&route2[..],nbpeer, &dest),
-    _ => new_reply_route_1(&route1[..],nbpeer, &dest),
-  };
-  // TODO error in reply ?? TODO specific full for it given reply full!!(no route, ...) : must be
   // use with getReplyWriter
   let tunnel_reply : Full<ReplyTraits<P>> = Full {
     me : dest.clone(),
@@ -557,7 +540,7 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
   send_test(tc, tunn_we, tunnels, output);
 }
 
-fn reply_test<P : Peer> (mut tc : TunnelTestConfig<P>, mut dr : 
+fn reply_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr : 
                          DestFull<FullR<MultipleReplyInfo<P>,MultipleErrorInfo,P,SizedWindows<TestSizedWindows>>,SRead, SizedWindows<TestSizedWindows>>
                          , mut input : Cursor<Vec<u8>>, tunnel : &mut Full<TestTunnelTraits<P>>)
 where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
@@ -584,12 +567,11 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
    // write 
    send_test(tc, rw, tunnelsrep, output);
 }
-fn reply_cached_test<P : Peer> (mut tc : TunnelTestConfig<P>, mut dr : 
+fn reply_cached_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr : 
                          DestFull<FullR<MultipleReplyInfo<P>,MultipleErrorInfo,P,SizedWindows<TestSizedWindows>>,SRead, SizedWindows<TestSizedWindows>>
                          , mut input : Cursor<Vec<u8>>, mut tunnels : Vec<Full<TestTunnelTraits<P>>>)
 where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 {
-   let reply_mode = tc.reply_mode.clone();
 
    let mut output : Cursor<Vec<u8>> = Cursor::new(Vec::new());
 
@@ -608,18 +590,18 @@ fn send_test<P : Peer, W : ExtWrite> (mut tc : TunnelTestConfig<P>, mut tunn_we 
 where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 {
  let TunnelTestConfig {
-     me : me,
-     dest : dest,
-     nbpeer : nbpeer,
-     route1 : route1,
-     route2 : route2,
-     input_length : input_length,
-     write_buffer_length : write_buffer_length,
-     read_buffer_length : read_buffer_length,
-     reply_mode : reply_mode,
-     error_mode : error_mode,
-     error_position : error_position,
-     test_mode : test_mode,
+     me : _,
+     dest : _,
+     nbpeer,
+     route1 : _,
+     route2 : _,
+     input_length,
+     write_buffer_length,
+     read_buffer_length,
+     reply_mode,
+     error_mode : _,
+     error_position,
+     test_mode,
  } = tc.clone();
 
 
@@ -715,7 +697,7 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
         let nbpeer = error_position + 1;
         let mut tunn_err = &mut tunnels[0..error_position + 1];
         tunn_err.reverse();
-        let (mut te, dest) = tunn_err[0].new_error_writer(&mut proxy.get_reader()).unwrap();
+        let (te, dest) = tunn_err[0].new_error_writer(&mut proxy.get_reader()).unwrap();
         assert!(dest == tunn_err[1].me.to_address());
         send_error (nbpeer, te, &mut tunn_err);
         return;
@@ -723,11 +705,6 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 
       nbp += 1;
     }
-    // not for dest peer TODO add dest test : after read dest
-      // reply error
-/*if let TestMode::Reply(0) = test_mode {
-  panic!("{:?}", output.into_inner());
-}*/
     assert!(nbtoprox == nbp);
     
     // dest stuff

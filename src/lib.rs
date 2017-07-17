@@ -6,35 +6,10 @@ extern crate rustc_serialize;
 extern crate mydht_base;
 extern crate bincode;
 extern crate rand;
-use rustc_serialize::{Encodable, Decodable};
 use std::cell::BorrowMutError;
 use std::cell::BorrowError;
-use std::marker::PhantomData;
-use rand::thread_rng;
-use rand::Rng;
-use bincode::SizeLimit;
-use mydht_base::transport::Address;
-use bincode::rustc_serialize::{
-  encode_into as bin_encode, 
-  decode_from as bin_decode,
-};
-use bincode::rustc_serialize::{
-  encode,
-  decode,
-};
-use std::convert::Into;
 use mydht_base::peer::Peer;
-use mydht_base::peer::{
-  Shadow,
-  ShadowSim,
-  ShadowReadOnce,
-  ShadowWriteOnce,
-  ShadowWriteOnceL,
-  new_shadow_read_once,
-  new_shadow_write_once,
-};
 use std::io::{
-  Cursor,
   Write,
   Read,
   Result,
@@ -42,23 +17,10 @@ use std::io::{
   ErrorKind as IoErrorKind,
 };
 use readwrite_comp::{
-  MultiW,
-  MultiWExt,
-  MultiRExt,
   ExtRead,
   ExtWrite,
-  CompW,
-  CompWState,
-  CompR,
-  CompRState,
-  CompExtW,
-  CompExtWInner,
-  CompExtR,
-  CompExtRInner,
 };
 
-use mydht_base::mydhtresult::Error;
-use std::slice::Iter;
 //use std::marker::Reflect;
 use bincode::rustc_serialize::EncodingError as BincError;
 use bincode::rustc_serialize::DecodingError as BindError;

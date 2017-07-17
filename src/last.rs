@@ -1,21 +1,9 @@
 use readwrite_comp::{
-  MultiW,
-  MultiWExt,
-  MultiRExt,
   ExtRead,
   ExtWrite,
-  CompW,
-  CompWState,
-  CompR,
-  CompRState,
-  CompExtW,
-  CompExtWInner,
-  CompExtR,
-  CompExtRInner,
 };
 use super::{
   TunnelWriter,
-  Info,
 };
 use super::common::{
   TunnelState,
@@ -25,7 +13,6 @@ use std::io::{
   Read,
   Result,
 };
-use mydht_base::peer::Peer;
 
 
 /**

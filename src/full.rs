@@ -2,23 +2,17 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use rand::ThreadRng;
-use rand::thread_rng;
 use rand::Rng;
 use readwrite_comp::{
-  MultiW,
   MultiWExt,
   MultiRExt,
   ExtRead,
   ExtWrite,
-  CompW,
-  CompWState,
   CompR,
-  CompRState,
   CompExtW,
   CompExtWInner,
   CompExtR,
   CompExtRInner,
-  ChainExtRead,
   DefaultID,
 };
 use std::io::{
@@ -29,8 +23,6 @@ use std::io::{
   Error as IoError,
   ErrorKind as IoErrorKind,
 };
-use mydht_base::keyval::KeyVal;
-use mydht_base::kvcache::Cache;
 use mydht_base::peer::Peer;
 use bincode::SizeLimit;
 use bincode::rustc_serialize::{
@@ -38,7 +30,6 @@ use bincode::rustc_serialize::{
   decode_from as bin_decode,
 };
 use super::{
-  TunnelWriter,
   TunnelReader,
   TunnelReaderError,
   TunnelReaderNoRep,
@@ -51,7 +42,6 @@ use super::{
   BincErr,
   BindErr,
   BorrMutErr,
-  BorrErr,
   TunnelNoRep,
   Tunnel,
   TunnelManager,
@@ -75,7 +65,6 @@ use super::info::error::{
   MultipleErrorInfo,
   MultipleErrorMode,
 };
-use super::nope::Nope;
 use std::marker::PhantomData;
 
 
@@ -91,7 +80,6 @@ use std::marker::PhantomData;
 /// Generic Tunnel Traits, use as a traits container for a generic tunnel implementation
 /// (to reduce number of trait parameter), it is mainly here to reduce number of visible trait
 /// parameters in code, 
-/// TODO reply info and error generic !!! after test for full ok (at least)
 pub trait GenTunnelTraits {
   type P : Peer;
   /// Reply frame limiter (specific to use of reply once with header in frame
@@ -99,12 +87,9 @@ pub trait GenTunnelTraits {
   type LR : ExtRead + Clone; // limiter
   type SSW : ExtWrite;// symetric writer
   type SSR : ExtRead;// seems userless (in rpely provider if needed)
-  // TODO generic types inside??
   type TC : TunnelCache<(TunnelCachedWriterExtClone<Self::SSW,Self::LW>,<Self::P as Peer>::Address),TunnelCachedReaderExtClone<Self::SSR>>
     + TunnelCacheErr<(ErrorWriter,<Self::P as Peer>::Address), MultipleErrorInfo> + CacheIdProducer;
-
   type EW : TunnelErrorWriter;
-//  type SP : SymProvider<Self::SSW,Self::SSR>; use replyprovider instead
   type RP : RouteProvider<Self::P>;
   /// Reply writer use only to include a reply envelope
   type RW : TunnelWriterExt;
@@ -137,7 +122,8 @@ pub struct Full<TT : GenTunnelTraits> {
   pub _p : PhantomData<TT>,
 }
 
-type Shadows<P : Peer, RI : Info, EI : Info,LW : ExtWrite,TW : TunnelWriterExt> = CompExtW<MultiWExt<TunnelShadowW<P,RI,EI,LW,TW>>,LW>;
+type Shadows<P,RI,EI,LW,TW> = CompExtW<MultiWExt<TunnelShadowW<P,RI,EI,LW,TW>>,LW>;
+//type Shadows<P : Peer, RI : Info, EI : Info,LW : ExtWrite,TW : TunnelWriterExt> = CompExtW<MultiWExt<TunnelShadowW<P,RI,EI,LW,TW>>,LW>;
 
 /**
  * No impl for instance when no error or no reply
@@ -192,7 +178,7 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite, LR : ExtRead> TunnelReaderExt for
 }
 
 impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite, LR : ExtRead> ExtRead for ProxyFull<OR,SW,E,LR> {
-  fn read_header<R : Read>(&mut self, r : &mut R) -> Result<()> {
+  fn read_header<R : Read>(&mut self, _ : &mut R) -> Result<()> {
     // actually already called
     Ok(())
   }
@@ -200,8 +186,8 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite, LR : ExtRead> ExtRead for ProxyFu
   fn read_from<R : Read>(&mut self, r : &mut R, buf : &mut[u8]) -> Result<usize> {
     match self.kind {
       ProxyFullKind::ReplyCached(_, ref mut rs) => rs.read_from(r,buf),
-      ProxyFullKind::QueryOnce(_,_) | ProxyFullKind::QueryCached(_,_) => self.origin_read.read_from(r,buf),
-      ProxyFullKind::ReplyOnce(_,ref mut limr,ref mut b,_,_,_) if *b => {
+      ProxyFullKind::QueryOnce(_) | ProxyFullKind::QueryCached(_,_) => self.origin_read.read_from(r,buf),
+      ProxyFullKind::ReplyOnce(ref mut limr,ref mut b,_,_,_) if *b => {
         let mut cr = self.origin_read.chain(limr);
         let i = cr.read_from(r,buf)?;
         if cr.in_second() {
@@ -209,15 +195,15 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite, LR : ExtRead> ExtRead for ProxyFu
         }
         Ok(i)
       },
-      ProxyFullKind::ReplyOnce(_,ref mut limr,_,_,_,_) => limr.read_from(r,buf),
+      ProxyFullKind::ReplyOnce(ref mut limr,_,_,_,_) => limr.read_from(r,buf),
     }
   }
 
   fn read_exact_from<R : Read>(&mut self, r : &mut R, mut buf: &mut[u8]) -> Result<()> {
     match self.kind {
       ProxyFullKind::ReplyCached(_, ref mut rs) => rs.read_exact_from(r, buf),
-      ProxyFullKind::QueryOnce(_,_) | ProxyFullKind::QueryCached(_,_) => self.origin_read.read_exact_from(r,buf),
-      ProxyFullKind::ReplyOnce(_,ref mut limr,ref mut b,_,_,_) if *b => {
+      ProxyFullKind::QueryOnce(_) | ProxyFullKind::QueryCached(_,_) => self.origin_read.read_exact_from(r,buf),
+      ProxyFullKind::ReplyOnce(ref mut limr,ref mut b,_,_,_) if *b => {
         let mut cr = self.origin_read.chain(limr);
         let i = cr.read_exact_from(r,buf)?;
         if cr.in_second() {
@@ -225,42 +211,19 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite, LR : ExtRead> ExtRead for ProxyFu
         }
         Ok(i)
       },
-      ProxyFullKind::ReplyOnce(_,ref mut limr,_,_,_,_) => limr.read_exact_from(r,buf),
-      /*
-      ProxyFullKind::ReplyOnce(_,ref mut limr,_,_,ref mut b) if *b => {
-        // TODO replace it by library chain two read + test cases
-        let mut br = &mut buf[..];
-        while br.len() > 0 {
-          if *b {
-        let i = try!(self.origin_read.read_from(r,br));
-        br = &mut buf[i..];
-        if i == 0 {
-          try!(self.origin_read.read_end(r));
-          try!(limr.read_header(r));
-          *b = false;
-          let n = limr.read_from(r,buf)?;
-          br = &mut buf[n..];
-        } 
-        } else {
-          let n = limr.read_from(r,buf)?;
-          br = &mut buf[n..];
-        }
-      };
-        Ok(())
-    },
-      ProxyFullKind::ReplyOnce(_,ref mut limr,_,_,_) => limr.read_exact_from(r,buf),*/
+      ProxyFullKind::ReplyOnce(ref mut limr,_,_,_,_) => limr.read_exact_from(r,buf),
     }
   }
 
   fn read_end<R : Read>(&mut self, r : &mut R) -> Result<()> {
     match self.kind {
       ProxyFullKind::ReplyCached(_,ref mut rs) => rs.read_end(r),
-      ProxyFullKind::QueryOnce(_,_) | ProxyFullKind::QueryCached(_,_) => self.origin_read.read_end(r),
-      ProxyFullKind::ReplyOnce(_,ref mut limr,true,_,_,_) => {
+      ProxyFullKind::QueryOnce(_) | ProxyFullKind::QueryCached(_,_) => self.origin_read.read_end(r),
+      ProxyFullKind::ReplyOnce(ref mut limr,true,_,_,_) => {
         let mut cr = self.origin_read.chain(limr);
         cr.read_end(r)
       }
-      ProxyFullKind::ReplyOnce(_,ref mut limr,ref mut b,_,_,_) => {
+      ProxyFullKind::ReplyOnce(ref mut limr,ref mut b,_,_,_) => {
         *b = true;
         limr.read_end(r)
       }
@@ -270,17 +233,14 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite, LR : ExtRead> ExtRead for ProxyFu
 
 /// kind of proxying
 /// or nothing proxy as previously read (continue reading from origin read)
-/// TODO proxy error kind ?? yes!!
 pub enum ProxyFullKind<SW : ExtWrite, LW : ExtWrite, LR : ExtRead> {
   /// end original read done in proxy init (TODO) and proxy as is then proxy content with symetric enc aka ReplyCached, last is key
   ReplyCached(TunnelCachedWriterExtClone<SW,LW>,LR),
   /// continue reading from original read and write as is, add cache id if the state if info from
   /// cache or added to cache : aka queryonce, 
-  /// TODO remove TunnelState (only one val)
-  QueryOnce(TunnelState, LW),
+  QueryOnce(LW),
   /// proxy content after with sim writer aka ReplyOnce
-  /// TODO remove TunnelStarte (only one val)
-  ReplyOnce(TunnelState,LR,bool,CompExtW<SW,LW>,LW,bool),
+  ReplyOnce(LR,bool,CompExtW<SW,LW>,LW,bool),
   /// after putting in cache : aka querycache : same as id plus our cach
   QueryCached(Vec<u8>, LW),
 }
@@ -366,7 +326,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
   #[inline]
   fn new_writer(&mut self, p : &Self::P) -> (Self::W, <Self::P as Peer>::Address) {
     let state = self.get_write_state();
-    let (mut shads,next) = self.next_shads(p, state.clone());
+    let (mut shads,next) = self.next_shads(p);
     let ccid = if let TunnelState::QueryCached = state {
       let r = self.new_dest_sym_reader(clone_shadows_keys(&mut shads.0));
       // add reader to cache
@@ -389,7 +349,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
   #[inline]
   fn new_writer_with_route (&mut self, route : &[&Self::P]) -> Self::W {
   let state = self.get_write_state();
-    let mut shads = self.make_shads(route, state.clone());
+    let mut shads = self.make_shads(route);
     let ccid = if let TunnelState::QueryCached = state {
       let r = self.new_dest_sym_reader(clone_shadows_keys(&mut shads.0));
       // add reader to cache
@@ -415,7 +375,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
       TunnelState::ReplyOnce => {
         let key = or.current_reply_info.as_ref().unwrap().get_reply_key().unwrap().clone();
         let ssw = CompExtW(self.sym_prov.new_sym_writer (key),self.limiter_proto_w.clone());
-        (ProxyFullKind::ReplyOnce(or.state.clone(), self.limiter_proto_r.clone(),true,ssw,self.limiter_proto_w.clone(),true), or.next_proxy_peer.clone().unwrap())
+        (ProxyFullKind::ReplyOnce(self.limiter_proto_r.clone(),true,ssw,self.limiter_proto_w.clone(),true), or.next_proxy_peer.clone().unwrap())
       },
       TunnelState::QueryCached => {
         let key = or.current_reply_info.as_ref().unwrap().get_reply_key().unwrap().clone();
@@ -441,7 +401,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
         (ProxyFullKind::ReplyCached(tcw.clone(),or.content_limiter.clone()),addref.clone())
       },
       TunnelState::QueryOnce => {
-        (ProxyFullKind::QueryOnce(TunnelState::QueryOnce, self.limiter_proto_w.clone()), or.next_proxy_peer.clone().unwrap())
+        (ProxyFullKind::QueryOnce(self.limiter_proto_w.clone()), or.next_proxy_peer.clone().unwrap())
       },
       TunnelState::TunnelState => {
         // TODO remove this state or unpanic by returning error
@@ -616,21 +576,13 @@ impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
       lim_payload.read_header(&mut inr)?;
       lim_proxy.write_header(w)?;
       let mut buf = vec![0;self.reply_once_buf_size];
-  /*    while { lim_payload.read_from(&mut inr,&mut buf[..])? != 0} {}
-      lim_payload.read_end(&mut inr)?;*/
-   
-//          let mut cw = Cursor::new(Vec::new());
-
-//       let mut tot = 0;
         // proxy head
-        let mut l = 0;
+        let mut l;
         while {
           l = lim_payload.read_from(&mut inr,&mut buf[..])?;
           lim_proxy.write_all_into(w,&buf[..l])?;
-//          tot += l;
           l != 0
         } {}
- //         panic!("cw {:?}", &cw.into_inner()[..]); // cw is wrong
           lim_proxy.write_end(w)?;
           lim_payload.read_end(&mut inr)?;
         };
@@ -814,7 +766,7 @@ impl<TT : GenTunnelTraits> Full<TT> {
 
   // TODO fuse with make_shads (lifetime issue on full : need to open it but first finish
   // make_shads fn
-  fn next_shads (&mut self, p : &TT::P, state : TunnelState) -> (Shadows<TT::P,MultipleReplyInfo<TT::P>,MultipleErrorInfo,TT::LW,TT::RW>, <TT::P as Peer>::Address) {
+  fn next_shads (&mut self, p : &TT::P) -> (Shadows<TT::P,MultipleReplyInfo<TT::P>,MultipleErrorInfo,TT::LW,TT::RW>, <TT::P as Peer>::Address) {
     let nbpeer;
     let otherroute = if let MultipleReplyMode::OtherRoute = self.reply_mode {true} else{false};
     let revroute : Vec<TT::P>;
@@ -873,7 +825,7 @@ impl<TT : GenTunnelTraits> Full<TT> {
 
   }
 
-  fn make_shads (&mut self, peers : &[&TT::P], state : TunnelState) -> Shadows<TT::P,MultipleReplyInfo<TT::P>,MultipleErrorInfo,TT::LW,TT::RW> {
+  fn make_shads (&mut self, peers : &[&TT::P]) -> Shadows<TT::P,MultipleReplyInfo<TT::P>,MultipleErrorInfo,TT::LW,TT::RW> {
 
     let nbpeer;
     let otherroute = if let MultipleReplyMode::OtherRoute = self.reply_mode {true} else{false};
@@ -940,31 +892,6 @@ impl<TT : GenTunnelTraits> Full<TT> {
 
 
 }
-
-
-
-
-struct TunnelReaderFull;
-impl ExtRead for TunnelReaderFull {
-  #[inline]
-  fn read_header<R : Read>(&mut self, _ : &mut R) -> Result<()> {
-    Ok(())
-  }
-
-  #[inline]
-  fn read_from<R : Read>(&mut self, _ : &mut R, _ : &mut[u8]) -> Result<usize> {
-    Ok(0)
-  }
-
-  #[inline]
-  fn read_exact_from<R : Read>(&mut self, _ : &mut R, _ : &mut[u8]) -> Result<()> { Ok(()) }
-
-  #[inline]
-  fn read_end<R : Read>(&mut self, _ : &mut R) -> Result<()> {
-    Ok(())
-  }
-}
-
 
 
 impl<P : Peer, RI : RepInfo, EI : Info,LW : ExtWrite,TW : TunnelWriterExt> TunnelWriterExt for FullW<RI,EI,P,LW,TW> {
@@ -1403,12 +1330,12 @@ impl<SW : ExtWrite,E : ExtWrite> ExtWrite for TunnelCachedWriterExt<SW,E> {
 
 impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite,LR : ExtRead> TunnelWriterExt for ProxyFull<OR,SW,E,LR> {
   #[inline]
-  fn write_dest_info_before<W : Write>(&mut self, w : &mut W) -> Result<()> {
+  fn write_dest_info_before<W : Write>(&mut self, _ : &mut W) -> Result<()> {
     Ok(())
   }
 
   #[inline]
-  fn write_dest_info<W : Write>(&mut self, w : &mut W) -> Result<()> {
+  fn write_dest_info<W : Write>(&mut self, _ : &mut W) -> Result<()> {
     Ok(())
   }
 }
@@ -1423,20 +1350,22 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite,LR : ExtRead> ExtWrite for ProxyFu
      (), //  bin_encode(&TunnelState::ReplyCached, wa, SizeLimit::Infinite).map_err(|e|BincErr(e))?,
       ProxyFullKind::QueryCached(_,_) =>
         bin_encode(&TunnelState::QueryCached, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?,
-      ProxyFullKind::QueryOnce(ref state,_) | ProxyFullKind::ReplyOnce(ref state,_,_,_,_,_) =>
-        bin_encode(state, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?,
+      ProxyFullKind::QueryOnce(_) =>
+        bin_encode(&TunnelState::QueryOnce, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?,
+      ProxyFullKind::ReplyOnce(_,_,_,_,_) =>
+        bin_encode(&TunnelState::ReplyOnce, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?,
     }
    
    
 
     // write connnect_info (cf do_cache method of full)
     match self.kind {
-      ProxyFullKind::ReplyCached(ref c,_) => {
+      ProxyFullKind::ReplyCached(_,_) => {
     //    let k = &c.try_borrow().map_err(|e|BorrErr(e))?.dest_cache_id;
     //    bin_encode(k, wa, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
       },
-      ProxyFullKind::QueryOnce(_,_) => (),
-      ProxyFullKind::ReplyOnce(_,_,_,_,_,_) => (),
+      ProxyFullKind::QueryOnce(_) => (),
+      ProxyFullKind::ReplyOnce(_,_,_,_,_) => (),
       ProxyFullKind::QueryCached(ref k,_) =>
         bin_encode(k, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?,
     }
@@ -1444,7 +1373,7 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite,LR : ExtRead> ExtWrite for ProxyFu
     // write tunnel header
     match self.kind {
       ProxyFullKind::ReplyCached(ref mut inner,_) => inner.write_header(w)?,
-      ProxyFullKind::ReplyOnce(_,_,_,_,ref mut lim,_) | ProxyFullKind::QueryOnce(_,ref mut lim) | ProxyFullKind::QueryCached(_,ref mut lim) => lim.write_header(w)?,
+      ProxyFullKind::ReplyOnce(_,_,_,ref mut lim,_) | ProxyFullKind::QueryOnce(ref mut lim) | ProxyFullKind::QueryCached(_,ref mut lim) => lim.write_header(w)?,
     }
     //}if let ProxyFullKind::ReplyCached(..) = self.kind {panic!("{:?}",wc.into_inner());}
     Ok(())
@@ -1454,14 +1383,14 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite,LR : ExtRead> ExtWrite for ProxyFu
   fn write_into<W : Write>(&mut self, w : &mut W, buf : &[u8]) -> Result<usize> {
     match self.kind {
       ProxyFullKind::ReplyCached(ref mut inner,_) => inner.write_into(w,buf),
-      ProxyFullKind::QueryOnce(_,ref mut lim) | ProxyFullKind::QueryCached(_,ref mut lim) => lim.write_into(w,buf),
+      ProxyFullKind::QueryOnce(ref mut lim) | ProxyFullKind::QueryCached(_,ref mut lim) => lim.write_into(w,buf),
 
       // in header proxying and in header reading
-      ProxyFullKind::ReplyOnce(_,_,true,_,ref mut lim,true) => {
+      ProxyFullKind::ReplyOnce(_,true,_,ref mut lim,true) => {
         lim.write_into(w,buf)
       },
       // read in payload
-      ProxyFullKind::ReplyOnce(_,_,false,ref mut payw,ref mut lim,ref mut b) => {
+      ProxyFullKind::ReplyOnce(_,false,ref mut payw,ref mut lim,ref mut b) => {
         // require to switch
         if *b {
           lim.write_end(w)?;
@@ -1471,7 +1400,7 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite,LR : ExtRead> ExtWrite for ProxyFu
         payw.write_into(w,buf)
       },
       // TODO use a single state to avoid this
-      ProxyFullKind::ReplyOnce(_,_,true,_,_,false) => panic!("Inconsistent replyonce proxy state read in header and write in content"),
+      ProxyFullKind::ReplyOnce(_,true,_,_,false) => panic!("Inconsistent replyonce proxy state read in header and write in content"),
 
     }
   }
@@ -1479,7 +1408,7 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite,LR : ExtRead> ExtWrite for ProxyFu
   fn write_all_into<W : Write>(&mut self, w : &mut W, buf : &[u8]) -> Result<()> {
     match self.kind {
       ProxyFullKind::ReplyCached(ref mut inner,_) => inner.write_all_into(w,buf),
-      ProxyFullKind::QueryOnce(_, ref mut lim) | ProxyFullKind::QueryCached(_, ref mut lim) => lim.write_all_into(w,buf),
+      ProxyFullKind::QueryOnce(ref mut lim) | ProxyFullKind::QueryCached(_, ref mut lim) => lim.write_all_into(w,buf),
       // a bit suboptimal as default impl
       ProxyFullKind::ReplyOnce(..) => {
         let mut cdw = CompExtW(DefaultID(), self);
@@ -1492,11 +1421,11 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite,LR : ExtRead> ExtWrite for ProxyFu
   fn flush_into<W : Write>(&mut self, w : &mut W) -> Result<()> {
     match self.kind {
       ProxyFullKind::ReplyCached(ref mut inner,_) => inner.flush_into(w),
-      ProxyFullKind::QueryOnce(_, ref mut lim) | ProxyFullKind::QueryCached(_, ref mut lim) => lim.flush_into(w),
-      ProxyFullKind::ReplyOnce(_,_,_,_,ref mut lim,true) => {
+      ProxyFullKind::QueryOnce(ref mut lim) | ProxyFullKind::QueryCached(_, ref mut lim) => lim.flush_into(w),
+      ProxyFullKind::ReplyOnce(_,_,_,ref mut lim,true) => {
         lim.flush_into(w)
       },
-      ProxyFullKind::ReplyOnce(_,_,_,ref mut payw,_,false) => {
+      ProxyFullKind::ReplyOnce(_,_,ref mut payw,_,false) => {
         payw.flush_into(w)
       },
     }
@@ -1505,13 +1434,13 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite,LR : ExtRead> ExtWrite for ProxyFu
   fn write_end<W : Write>(&mut self, w : &mut W) -> Result<()> {
     match self.kind {
       ProxyFullKind::ReplyCached(ref mut inner,_) => inner.write_end(w),
-      ProxyFullKind::QueryOnce(_,ref mut lim) | ProxyFullKind::QueryCached(_, ref mut lim) => lim.write_end(w),
-      ProxyFullKind::ReplyOnce(_,_,_,ref mut payw,ref mut lim,true) => {
+      ProxyFullKind::QueryOnce(ref mut lim) | ProxyFullKind::QueryCached(_, ref mut lim) => lim.write_end(w),
+      ProxyFullKind::ReplyOnce(_,_,ref mut payw,ref mut lim,true) => {
         lim.write_end(w)?;
         payw.write_header(w)?;
         payw.write_end(w)
       },
-      ProxyFullKind::ReplyOnce(_,_,_,ref mut payw,ref mut lim,ref mut b) => {
+      ProxyFullKind::ReplyOnce(_,_,ref mut payw,_,ref mut b) => {
         *b = true;
         payw.write_end(w)
       },
@@ -1620,17 +1549,17 @@ pub enum ErrorWriter {
 
 
 impl<LW : ExtWrite, SW : ExtWrite> TunnelWriterExt for ReplyWriter<LW,SW> {
-  fn write_dest_info_before<W : Write>(&mut self, w : &mut W) -> Result<()> {
+  fn write_dest_info_before<W : Write>(&mut self, _ : &mut W) -> Result<()> {
     match *self {
-      ReplyWriter::Route { shad : ref mut shad } => Ok(()),
-      ReplyWriter::CachedRoute { shad : ref mut shad } => Ok(()),
+      ReplyWriter::Route { shad : _ } => Ok(()),
+      ReplyWriter::CachedRoute { shad : _ } => Ok(()),
     }
   }
 
-  fn write_dest_info<W : Write>(&mut self, w : &mut W) -> Result<()> {
+  fn write_dest_info<W : Write>(&mut self, _ : &mut W) -> Result<()> {
     match *self {
-      ReplyWriter::Route { shad : ref mut shad } => Ok(()),
-      ReplyWriter::CachedRoute { shad : ref mut shad } => Ok(()),
+      ReplyWriter::Route { shad : _ } => Ok(()),
+      ReplyWriter::CachedRoute { shad : _ } => Ok(()),
     }
   }
 }

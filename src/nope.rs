@@ -1,18 +1,7 @@
 use std::marker::PhantomData;
 use readwrite_comp::{
-  MultiW,
-  MultiWExt,
-  MultiRExt,
   ExtRead,
   ExtWrite,
-  CompW,
-  CompWState,
-  CompR,
-  CompRState,
-  CompExtW,
-  CompExtWInner,
-  CompExtR,
-  CompExtRInner,
 };
 use super::{
   TunnelWriter,
@@ -23,9 +12,7 @@ use super::{
   TunnelCacheErr,
   CacheIdProducer,
   TunnelErrorWriter,
-  TunnelReader,
   TunnelReaderNoRep,
-  TunnelReaderError,
   Info,
   RepInfo,
   SymProvider,
@@ -56,19 +43,19 @@ impl Info for Nope {
   }
 
   #[inline]
-  fn write_in_header<W : Write>(&mut self, w : &mut W) -> Result<()> {
+  fn write_in_header<W : Write>(&mut self, _ : &mut W) -> Result<()> {
     Ok(())
   }
   #[inline]
-  fn write_read_info<W : Write>(&mut self, w : &mut W) -> Result<()> {
+  fn write_read_info<W : Write>(&mut self, _ : &mut W) -> Result<()> {
     Ok(())
   }
   #[inline]
-  fn read_from_header<R : Read>(r : &mut R) -> Result<Self> {
+  fn read_from_header<R : Read>(_ : &mut R) -> Result<Self> {
     Ok(Nope)
   }
   #[inline]
-  fn read_read_info<R : Read>(&mut self, r : &mut R) -> Result<()> {
+  fn read_read_info<R : Read>(&mut self, _ : &mut R) -> Result<()> {
     Ok(())
   }
 

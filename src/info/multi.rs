@@ -8,11 +8,7 @@ use super::super::{
   BindErr,
   RepInfo,
   Info,
-  TunnelWriter,
-  TunnelWriterExt,
-  TunnelNoRep,
   ReplyProvider,
-  RouteProvider,
   SymProvider,
 };
 use bincode::SizeLimit;
@@ -25,21 +21,6 @@ use std::io::{
   Write,
   Read,
   Result,
-};
-use readwrite_comp::{
-  MultiW,
-  MultiWExt,
-  MultiRExt,
-  ExtRead,
-  ExtWrite,
-  CompW,
-  CompWState,
-  CompR,
-  CompRState,
-  CompExtW,
-  CompExtWInner,
-  CompExtR,
-  CompExtRInner,
 };
 
 
@@ -221,56 +202,19 @@ impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> ReplyProvider<P, MultipleReplyI
 
        MultipleReplyMode::RouteReply => {
          let mut res : Vec<MultipleReplyInfo<P>> = Vec::with_capacity(l-1);
-         for i in 1..l {
+         for _ in 1..l {
            res.push(MultipleReplyInfo::RouteReply(self.new_sym_key()))
          }
          res
        },
        MultipleReplyMode::CachedRoute => {
          let mut res : Vec<MultipleReplyInfo<P>> = Vec::with_capacity(l-1);
-         for i in 1..l {
+         for _ in 1..l {
            res.push(MultipleReplyInfo::CachedRoute(self.new_sym_key()))
          }
          res
        },
      }
-/*  pub fn errhandling_infos<P : Peer>(&self, route : &[(usize,&P)], error_route : Option<&[(usize,&P)]>) -> Vec<ErrorHandlingInfo<P>> {
-     // dest err handling is used as a possible ack (val)
-     let mut res = vec![ErrorHandlingInfo::NoHandling; route.len()];
-//     let error_route_len = error_route.map(|er|er.len()).unwrap_or(0);
-     
-     let need_cached_repkey = if let &TunnelMode::Tunnel(..) = self {
-       true 
-     } else {false};
-     match self {
-      &TunnelMode::NoTunnel => (),
-      &TunnelMode::BiTunnel(_,_,_, ref b) | &TunnelMode::NoRepTunnel(_,_, ref b) | &TunnelMode::Tunnel(_,_, ref b) => {
-        match b {
-          &ErrorHandlingMode::NoHandling if !need_cached_repkey => (),
-          &ErrorHandlingMode::KnownDest(ref ob) if !need_cached_repkey => {
-            res[route.len() - 1] = ErrorHandlingInfo::KnownDest(route[0].1.get_key(), ob.as_ref().map(|b|(**b).clone()));
-          },
-          &ErrorHandlingMode::ErrorRoute if !need_cached_repkey => {
-            for i in 0..route.len() {
-              res[i] = ErrorHandlingInfo::ErrorRoute;
-            }
-          },
-          // Tunnel & cached error
-          _ => {
-            for i in 0..route.len() {
-
-              // write error code
-              res[i] = ErrorHandlingInfo::ErrorCachedRoute(route.get(i).unwrap().0);
-            }
-          },
-
-        }
-      },
-     };
-     res
-  }
-
-*/
   }
 }
 

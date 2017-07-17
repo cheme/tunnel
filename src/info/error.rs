@@ -6,13 +6,8 @@ use rand::Rng;
 use super::super::{
   BincErr,
   BindErr,
-  RepInfo,
   Info,
-  TunnelWriter,
-  TunnelWriterExt,
   ErrorProvider,
-  RouteProvider,
-  TunnelNoRep,
 };
 /// wrong use need redesign TODO redesign it on specific trait (not TW as param)
 use bincode::SizeLimit;
@@ -27,23 +22,7 @@ use std::io::{
   Result,
 };
 
-use readwrite_comp::{
-  MultiW,
-  MultiWExt,
-  MultiRExt,
-  ExtRead,
-  ExtWrite,
-  CompW,
-  CompWState,
-  CompR,
-  CompRState,
-  CompExtW,
-  CompExtWInner,
-  CompExtR,
-  CompExtRInner,
-};
 
-use std::ops::FnMut;
 #[derive(RustcDecodable,RustcEncodable,Debug,Clone,PartialEq,Eq)]
 pub enum MultipleErrorMode {
   /// do not propagate errors
@@ -64,15 +43,6 @@ pub enum MultipleErrorInfo {
   /// only usable with QueryCached state : with single route config it is the only senseful usage.
   /// Please note that it could be use to clear cache
   CachedRoute(usize), // usize is error code
-}
-impl MultipleErrorInfo {
-  fn do_cache (&self) -> bool {
-    if let &MultipleErrorInfo::CachedRoute(_) = self {
-      true
-    } else {
-      false
-    }
-  }
 }
 impl Info for MultipleErrorInfo {
 
@@ -100,7 +70,7 @@ impl Info for MultipleErrorInfo {
   }
 
   #[inline]
-  fn read_read_info<R : Read>(&mut self, r : &mut R) -> Result<()> {
+  fn read_read_info<R : Read>(&mut self, _ : &mut R) -> Result<()> {
     Ok(())
   }
 
@@ -136,7 +106,7 @@ impl<P : Peer> ErrorProvider<P, MultipleErrorInfo> for MulErrorProvider {
          vec![MultipleErrorInfo::NoHandling;l-1],
        MultipleErrorMode::CachedRoute => {
          let mut res : Vec<MultipleErrorInfo> = Vec::with_capacity(l-1);
-         for i in 1..l {
+         for _ in 1..l {
            let mut errorid = self.gen.gen();
            while errorid == 0 {
               errorid = self.gen.gen();
