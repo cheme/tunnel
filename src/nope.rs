@@ -241,7 +241,7 @@ impl<P : Peer, EI : Info> ErrorProvider<P,EI> for Nope {
     panic!("Placeholder, should not be called");
   }
 }
-impl<P : Peer, RI : RepInfo,SSW,SSR> ReplyProvider<P,RI,SSW,SSR> for Nope {
+impl<P : Peer, RI : RepInfo> ReplyProvider<P,RI> for Nope {
   fn new_reply (&mut self, _ : &[&P]) -> Vec<RI> {
     panic!("Placeholder, should not be called");
   }

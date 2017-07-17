@@ -113,7 +113,7 @@ pub trait ErrorProvider<P : Peer, EI : Info> {
   fn new_error_route (&mut self, &[&P]) -> Vec<EI>;
 }
 /// Reply info vec do not contain origin (start at index one of route)
-pub trait ReplyProvider<P : Peer, RI : RepInfo,SSW,SSR> : SymProvider<SSW,SSR> {
+pub trait ReplyProvider<P : Peer, RI : RepInfo> {
   /// reply info for dest (last in vec) is different from hop reply info : TODO add new associated type (cf
   /// RepInfo) to avoid mandatory enum on RI.
   /// Last param is dest symetric key to use for reply (could change)

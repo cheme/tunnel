@@ -195,7 +195,7 @@ impl<P:Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> SymProvider<SSW,SSR> for ReplyInf
 
 }
 
-impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> ReplyProvider<P, MultipleReplyInfo<P>,SSW,SSR> for ReplyInfoProvider<P,SSW,SSR,SP> {
+impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> ReplyProvider<P, MultipleReplyInfo<P>> for ReplyInfoProvider<P,SSW,SSR,SP> {
 
   /// Error infos bases for peers
   fn new_reply (&mut self, route : &[&P]) -> Vec<MultipleReplyInfo<P>> {
@@ -278,7 +278,7 @@ impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> ReplyProvider<P, MultipleReplyI
 /// specific provider for no rpe
 pub struct NoMultiRepProvider;
 
-impl<P : Peer,SSW,SSR> ReplyProvider<P, MultipleReplyInfo<P>,SSW,SSR> for NoMultiRepProvider {
+impl<P : Peer> ReplyProvider<P, MultipleReplyInfo<P>> for NoMultiRepProvider {
   #[inline]
   fn new_reply (&mut self, p : &[&P]) -> Vec<MultipleReplyInfo<P>> {
     vec![MultipleReplyInfo::NoHandling;p.len()-1]

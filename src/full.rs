@@ -109,7 +109,8 @@ pub trait GenTunnelTraits {
   type RP : RouteProvider<Self::P>;
   /// Reply writer use only to include a reply envelope
   type RW : TunnelWriterExt;
-  type REP : ReplyProvider<Self::P, MultipleReplyInfo<Self::P>,Self::SSW,Self::SSR>;
+  type REP : ReplyProvider<Self::P, MultipleReplyInfo<Self::P>>;
+  type SP : SymProvider<Self::SSW,Self::SSR>;
   type TNR : TunnelNoRep<P=Self::P,W=Self::RW>;
   type EP : ErrorProvider<Self::P, MultipleErrorInfo>;
 }
@@ -127,6 +128,7 @@ pub struct Full<TT : GenTunnelTraits> {
 //  pub sym_prov : TT::SP,
   pub route_prov : TT::RP,
   pub reply_prov : TT::REP,
+  pub sym_prov : TT::SP,
   pub tunrep : TT::TNR,
   pub error_prov : TT::EP,
   pub rng : ThreadRng,
@@ -413,7 +415,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
     let (pfk,a) = match or.state {
       TunnelState::ReplyOnce => {
         let key = or.current_reply_info.as_ref().unwrap().get_reply_key().unwrap().clone();
-        let ssw = CompExtW(self.reply_prov.new_sym_writer (key),self.limiter_proto_w.clone());
+        let ssw = CompExtW(self.sym_prov.new_sym_writer (key),self.limiter_proto_w.clone());
         (ProxyFullKind::ReplyOnce(or.state.clone(), self.limiter_proto_r.clone(),true,ssw,self.limiter_proto_w.clone(),true), or.next_proxy_peer.clone().unwrap())
       },
       TunnelState::QueryCached => {
@@ -499,7 +501,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
             ks.push (k.clone());
           }
         }
-        let cr = new_dest_cached_reader_ext(ks.into_iter().map(|k|self.reply_prov.new_sym_reader(k)).collect(), self.limiter_proto_r.clone());
+        let cr = new_dest_cached_reader_ext(ks.into_iter().map(|k|self.sym_prov.new_sym_reader(k)).collect(), self.limiter_proto_r.clone());
 
         or.current_reply_info = current_reply_info;
         or.current_error_info = current_error_info;
@@ -580,7 +582,7 @@ impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
         a = bin_decode(&mut inr, SizeLimit::Infinite).map_err(|e|BindErr(e))?;
         rep = if let MultipleReplyInfo::RouteReply(v) = ritmp {
           // return writer
-          let ssw = CompExtW(self.reply_prov.new_sym_writer(v),self.limiter_proto_w.clone());
+          let ssw = CompExtW(self.sym_prov.new_sym_writer(v),self.limiter_proto_w.clone());
           ReplyWriter::Route{shad : ssw}
         } else {
           panic!("missing key for encoding reply"); // TODO transform to error
@@ -593,7 +595,7 @@ impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
         if let Some(k) = okey {
           // return writer TODO consider removing current cache id to avoid clone(not use in reply
           // writer init
-          let ssw = TunnelCachedWriterExt::new(self.reply_prov.new_sym_writer(k), tr.origin_read.current_cache_id.clone().unwrap(), self.limiter_proto_w.clone());
+          let ssw = TunnelCachedWriterExt::new(self.sym_prov.new_sym_writer(k), tr.origin_read.current_cache_id.clone().unwrap(), self.limiter_proto_w.clone());
           (ReplyWriter::CachedRoute{shad : ssw}, tr.origin_read.from.clone())
 
         } else {
@@ -762,11 +764,11 @@ impl<TT : GenTunnelTraits> TunnelManager for Full<TT> {
   }
 
   fn new_sym_writer (&mut self, sk : Vec<u8>, p_cache_id : Vec<u8>) -> Self::SSCW {
-    Rc::new(RefCell::new(TunnelCachedWriterExt::new(self.reply_prov.new_sym_writer(sk), p_cache_id, self.limiter_proto_w.clone())))
+    Rc::new(RefCell::new(TunnelCachedWriterExt::new(self.sym_prov.new_sym_writer(sk), p_cache_id, self.limiter_proto_w.clone())))
   }
 
   fn new_dest_sym_reader (&mut self, ks : Vec<Vec<u8>>) -> Self::SSCR {
-    Rc::new(RefCell::new(MultiRExt::new(ks.into_iter().map(|k|self.reply_prov.new_sym_reader(k)).collect())))
+    Rc::new(RefCell::new(MultiRExt::new(ks.into_iter().map(|k|self.sym_prov.new_sym_reader(k)).collect())))
   }
 
 }

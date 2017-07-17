@@ -420,11 +420,12 @@ impl<P : Peer> GenTunnelTraits for ReplyTraits<P> {
   type RP = Nope;
   type RW = Nope;
   type REP = ReplyInfoProvider<
-    P,
-    SWrite,
-    SRead,
-    SProv,
+    Self::P,
+    Self::SSW,
+    Self::SSR,
+    Self::SP,
   >;
+  type SP = SProv;
   type EP = NoErrorProvider;
   type TNR = TunnelNope<P>;
   type EW = ErrorWriter;
@@ -449,11 +450,12 @@ impl<P : Peer> GenTunnelTraits for TestTunnelTraits<P> {
   type REP = ReplyInfoProvider<
 //    SizedWindows<TestSizedWindows>,
 //    Full<ReplyTraits<P>>,
-    P,
-    SWrite,
-    SRead,
-    SProv,
+    Self::P,
+    Self::SSW,
+    Self::SSR,
+    Self::SP,
   >;
+  type SP = SProv;
   type EP = MulErrorProvider;
 }
 #[derive(Clone)]
@@ -502,6 +504,7 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
       symprov : SProv(ShadowTest(0,0,ShadowModeTest::SimpleShift)),
       _p : PhantomData,
     },
+    sym_prov : SProv(ShadowTest(0,0,ShadowModeTest::SimpleShift)),
     error_prov : NoErrorProvider,
     rng : thread_rng(),
     limiter_proto_w : SizedWindows::new(TestSizedWindows),
@@ -525,6 +528,7 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
     //  pub sym_prov : TT::SP,
     route_prov : route_prov,
     reply_prov : rip,
+    sym_prov : SProv(ShadowTest(0,0,ShadowModeTest::SimpleShift)),
     error_prov : MulErrorProvider::new(error_mode.clone()).unwrap(),
     rng : thread_rng(),
     limiter_proto_w : SizedWindows::new(TestSizedWindows),
