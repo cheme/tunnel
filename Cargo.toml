@@ -21,16 +21,16 @@ path = "../readwrite-comp/"
 #git = "https://github.com/cheme/readwrite-comp.git"
 
 [dependencies.mydht-base]
-path = "../mydht/mydht-base/"
-#git = "https://github.com/cheme/mydht/mydht-base"
+path = "../mydht/mydht/mydht-base/"
+#git = "https://github.com/cheme/mydht.git"
 optional = true
 
 [dev-dependencies.mydht-basetest]
-path = "../mydht/mydht-basetest/"
-#git = "https://github.com/cheme/mydht-basetest.git"
+path = "../mydht/mydht/mydht-basetest/"
+#git = "https://github.com/cheme/mydht.git"
 
 [dev-dependencies.mydht-base]
-path = "../mydht/mydht-base/"
-#git = "https://github.com/cheme/mydht/mydht-base"
+path = "../mydht/mydht/mydht-base/"
+#git = "https://github.com/cheme/mydht.git"
 
 
