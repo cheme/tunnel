@@ -23,13 +23,13 @@ use std::io::{
   Error as IoError,
   ErrorKind as IoErrorKind,
 };
-use mydht_base::peer::Peer;
 use bincode::SizeLimit;
 use bincode::rustc_serialize::{
   encode_into as bin_encode, 
   decode_from as bin_decode,
 };
 use super::{
+  Peer,
   TunnelReader,
   TunnelReaderError,
   TunnelReaderNoRep,
@@ -155,7 +155,7 @@ pub struct FullR<RI : RepInfo, EI : Info, P : Peer, LR : ExtRead> {
   next_proxy_peer : Option<<P as Peer>::Address>,
   read_cache : bool, // if cache has been read
   tunnel_id : Option<usize>, // TODO useless remove??
-  shad : CompExtR<<P as Peer>::Shadow,LR>,
+  shad : CompExtR<<P as Peer>::ShadRead,LR>,
   content_limiter : LR,
   need_content_limiter : bool,
   error_code : Option<usize>,
@@ -288,7 +288,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
  
   fn new_reader (&mut self, from : &<Self::P as Peer>::Address) -> Self::TR {
 
-    let s = self.me.get_shadower(false);
+    let s = self.me.new_shadr();
     FullR {
       error_code : None,
       from : from.clone(), // only usefull for cached route
@@ -774,7 +774,7 @@ impl<TT : GenTunnelTraits> Full<TT> {
     let add;
     { // restrict lifetime of peers for other route reply after
       let peers : Vec<&TT::P> = self.route_prov.new_route(p);
-      add = peers[1].to_address();
+      add = peers[1].get_address().clone();
       nbpeer = peers.len();
       shad = Vec::with_capacity(nbpeer - 1);
       let mut errors = self.error_prov.new_error_route(&peers[..]);
@@ -785,14 +785,14 @@ impl<TT : GenTunnelTraits> Full<TT> {
 
       for i in (1..nbpeer).rev() {
         shad.push(TunnelShadowW {
-          shad : peers[i].get_shadower(true),
+          shad : peers[i].new_shadw(),
           next_proxy_peer : next_proxy_peer,
           tunnel_id : geniter.next().unwrap(),
           rep : replies.pop().unwrap(),
           err : errors.pop().unwrap(),
           replypayload : None,
         });
-        next_proxy_peer = peers.get(i).map(|p|p.to_address());
+        next_proxy_peer = peers.get(i).map(|p|p.get_address().clone());
       }
 
 
@@ -817,7 +817,7 @@ impl<TT : GenTunnelTraits> Full<TT> {
          // messy TODO refactor new_writer to use iterator
          revroute.iter().collect()
        };
-       let add = rref[1].to_address();
+       let add = rref[1].get_address().clone();
        s.replypayload = Some((self.limiter_proto_w.clone(),self.tunrep.new_writer_with_route(&rref[..]),add));
     });
 
@@ -842,14 +842,14 @@ impl<TT : GenTunnelTraits> Full<TT> {
 //panic!("{:?}",peers);
       for i in (1..nbpeer).rev() {
         shad.push(TunnelShadowW {
-          shad : peers[i].get_shadower(true),
+          shad : peers[i].new_shadw(),
           next_proxy_peer : next_proxy_peer,
           tunnel_id : geniter.next().unwrap(),
           rep : replies.pop().unwrap(),
           err : errors.pop().unwrap(),
           replypayload : None,
         });
-        next_proxy_peer = peers.get(i).map(|p|p.to_address());
+        next_proxy_peer = peers.get(i).map(|p|p.get_address().clone());
       }
 
 
@@ -873,7 +873,7 @@ impl<TT : GenTunnelTraits> Full<TT> {
          // messy TODO refactor new_writer to use iterator
          revroute.iter().collect()
        };
-       let add = rref[1].to_address();
+       let add = rref[1].get_address().clone();
        s.replypayload = Some((self.limiter_proto_w.clone(),self.tunrep.new_writer_with_route(&rref[..]),add));
     });
 
@@ -1182,7 +1182,7 @@ impl<E : ExtRead, P : Peer, RI : RepInfo, EI : Info> ExtRead for FullR<RI,EI,P,E
 /// next is possible shadow key for reply,
 /// And last is possible shadowroute for reply or error
 pub struct TunnelShadowW<P : Peer, RI : Info, EI : Info,LW : ExtWrite,TW : TunnelWriterExt> {
-  shad : <P as Peer>::Shadow,
+  shad : <P as Peer>::ShadWrite,
   next_proxy_peer : Option<<P as Peer>::Address>,
   tunnel_id : usize, // tunnelId change for every hop that is description tci TODO should only be for cached reply info or err pb same for both : TODO useless ? error code are currently in error info
   rep : RI,
@@ -1196,7 +1196,7 @@ impl<P : Peer, RI : RepInfo, EI : Info,LW : ExtWrite,TW : TunnelWriterExt> ExtWr
   #[inline]
   fn write_header<W : Write>(&mut self, w : &mut W) -> Result<()> {
     // write basic tunnelinfo and content
-    try!(self.shad.write_header(w));
+    self.shad.write_header(w)?;
     let mut inw  = CompExtWInner(w, &mut self.shad);
     bin_encode(&self.next_proxy_peer, &mut inw, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
     bin_encode(&self.tunnel_id, &mut inw, SizeLimit::Infinite).map_err(|e|BincErr(e))?;

@@ -8,6 +8,7 @@ use super::super::{
   BindErr,
   Info,
   ErrorProvider,
+  Peer,
 };
 /// wrong use need redesign TODO redesign it on specific trait (not TW as param)
 use bincode::SizeLimit;
@@ -15,7 +16,6 @@ use bincode::rustc_serialize::{
   encode_into as bin_encode, 
   decode_from as bin_decode,
 };
-use mydht_base::peer::Peer;
 use std::io::{
   Write,
   Read,

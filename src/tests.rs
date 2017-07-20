@@ -1,14 +1,12 @@
 extern crate mydht_basetest;
+extern crate mydht_base;
 use rand::thread_rng;
 use rand::Rng;
 
 use std::io::{Error, ErrorKind};
-use mydht_base::peer::{
-  Peer,
-  Shadow,
-};
 use std::marker::PhantomData;
 use super::{
+  Peer,
   TunnelCache,
   TunnelCacheErr,
   RouteProvider,
@@ -66,7 +64,7 @@ use self::mydht_basetest::shadow::{
   ShadowTest,
   ShadowModeTest,
 };
-use mydht_base::bytes_wr::sized_windows::{
+use self::mydht_base::bytes_wr::sized_windows::{
   SizedWindowsParams,
   SizedWindows,
 };
@@ -454,7 +452,6 @@ pub enum TestMode {
 }
 fn new_full_tunnel<P : Peer> (tc : &TunnelTestConfig<P>, from : &P, ixcache : usize) 
                           -> Full<TestTunnelTraits<P>>
-where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 {
   let route_prov = Rp::new (tc.nbpeer,tc.route1.clone(),tc.route2.clone());
   let cache : CachedInfoManager<P> = CachedInfoManager(Vec::new(),0,ixcache,Vec::new(),0,Vec::new(),0,Vec::new(),0);
@@ -525,7 +522,6 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
  
 /// main tunnel test : send message over a route
 pub fn tunnel_test<P : Peer> (  tc : TunnelTestConfig<P>)
-where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 {
   let mut ixcache = 0;
  // TODO from here generic function
@@ -535,7 +531,7 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
   }).collect();
 
   let (tunn_we,dest) = tunnels[0].new_writer(&tc.dest);
-  assert!(dest == tunnels[1].me.to_address());
+  assert!(&dest == tunnels[1].me.get_address());
   let output : Cursor<Vec<u8>> = Cursor::new(Vec::new());
   send_test(tc, tunn_we, tunnels, output);
 }
@@ -543,7 +539,6 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 fn reply_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr : 
                          DestFull<FullR<MultipleReplyInfo<P>,MultipleErrorInfo,P,SizedWindows<TestSizedWindows>>,SRead, SizedWindows<TestSizedWindows>>
                          , mut input : Cursor<Vec<u8>>, tunnel : &mut Full<TestTunnelTraits<P>>)
-where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 {
    let mut ixcache = 127;//half of 8 bit pool
    let reply_mode = tc.reply_mode.clone();
@@ -559,7 +554,7 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
      ixcache += 1;
     new_full_tunnel(&tc, &p, ixcache)
    }).collect();
-   assert!(dest == tunnelsrep[1].me.to_address());
+   assert!(&dest == tunnelsrep[1].me.get_address());
    tunnel.reply_writer_init(&mut rw, &mut dr, &mut input, &mut output).unwrap();
 
 
@@ -570,14 +565,13 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 fn reply_cached_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr : 
                          DestFull<FullR<MultipleReplyInfo<P>,MultipleErrorInfo,P,SizedWindows<TestSizedWindows>>,SRead, SizedWindows<TestSizedWindows>>
                          , mut input : Cursor<Vec<u8>>, mut tunnels : Vec<Full<TestTunnelTraits<P>>>)
-where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 {
 
    let mut output : Cursor<Vec<u8>> = Cursor::new(Vec::new());
 
    tunnels.reverse();
    let (mut rw, dest) = tunnels[0].new_reply_writer(&mut dr, &mut input).unwrap();
-   assert!(dest == tunnels[1].me.to_address());
+   assert!(&dest == tunnels[1].me.get_address());
    tunnels[0].reply_writer_init(&mut rw, &mut dr, &mut input, &mut output).unwrap();
 
 
@@ -587,7 +581,6 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 
 fn send_test<P : Peer, W : ExtWrite> (mut tc : TunnelTestConfig<P>, mut tunn_we : W, 
                          mut tunnels : Vec<Full<TestTunnelTraits<P>>>, mut output : Cursor<Vec<u8>>)
-where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 {
  let TunnelTestConfig {
      me : _,
@@ -656,8 +649,8 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
     let nbtoprox = if nbpeer > 2 {nbpeer - 2} else {0};
     let mut nbp = 0;
     for i in 1 .. nbpeer - 1 {
-      let from_add = tunnels[i - 1].me.to_address();
-      let to_add = tunnels[i + 1].me.to_address();
+      let from_add = tunnels[i - 1].me.get_address().clone();
+      let to_add = tunnels[i + 1].me.get_address().clone();
 
       let mut input_v = Cursor::new(output.into_inner());
       output = Cursor::new(Vec::new());
@@ -698,7 +691,7 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
         let mut tunn_err = &mut tunnels[0..error_position + 1];
         tunn_err.reverse();
         let (te, dest) = tunn_err[0].new_error_writer(&mut proxy.get_reader()).unwrap();
-        assert!(dest == tunn_err[1].me.to_address());
+        assert!(&dest == tunn_err[1].me.get_address());
         send_error (nbpeer, te, &mut tunn_err);
         return;
       }
@@ -712,7 +705,7 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
     let mut dest_reader;
     let mut input_v;
     {
-      let from_add = tunnels[nbpeer - 2].me.to_address();
+      let from_add = tunnels[nbpeer - 2].me.get_address().clone();
       let tunnel = &mut tunnels[nbpeer - 1];
       tunn_re = tunnel.new_reader(&from_add);
       input_v = Cursor::new(output.into_inner());
@@ -783,7 +776,6 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 }
 fn send_error<P : Peer, EW : TunnelErrorWriter> (nbpeer : usize, mut tunn_e : EW, 
                          mut tunnels : &mut [Full<TestTunnelTraits<P>>])
-where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
 {
 
  let mut output = Cursor::new(Vec::new());
@@ -794,8 +786,8 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
     let nbtoprox = if nbpeer > 2 {nbpeer - 2} else {0};
     let mut nbp = 0;
     for i in 1 .. nbpeer - 1 {
-      let from_add = tunnels[i - 1].me.to_address();
-      let to_add = tunnels[i + 1].me.to_address();
+      let from_add = tunnels[i - 1].me.get_address().clone();
+      let to_add = tunnels[i + 1].me.get_address().clone();
       let tunnel = &mut tunnels[i];
       tunn_re = tunnel.new_reader(&from_add);
       assert!(tunn_re.is_dest() == None);
@@ -815,7 +807,7 @@ where <<P as Peer>::Shadow as Shadow>::ShadowMode : Eq
     }
 
     assert!(nbtoprox == nbp);
-      let from_add = tunnels[nbpeer - 2].me.to_address();
+      let from_add = tunnels[nbpeer - 2].me.get_address().clone();
       let tunnel = &mut tunnels[nbpeer - 1];
       tunn_re = tunnel.new_reader(&from_add);
       input_v = Cursor::new(output.into_inner());

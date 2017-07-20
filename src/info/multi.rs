@@ -10,13 +10,13 @@ use super::super::{
   Info,
   ReplyProvider,
   SymProvider,
+  Peer,
 };
 use bincode::SizeLimit;
 use bincode::rustc_serialize::{
   encode_into as bin_encode, 
   decode_from as bin_decode, 
 };
-use mydht_base::peer::Peer;
 use std::io::{
   Write,
   Read,
@@ -184,7 +184,7 @@ impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> ReplyProvider<P, MultipleReplyI
        MultipleReplyMode::NoHandling => vec![MultipleReplyInfo::NoHandling;l-1],
        MultipleReplyMode::KnownDest => {
          let mut res = vec![MultipleReplyInfo::NoHandling;l-1];
-         res[l-2] = MultipleReplyInfo::KnownDest(route[0].to_address());
+         res[l-2] = MultipleReplyInfo::KnownDest(route[0].get_address().clone());
          res
        },
        MultipleReplyMode::OtherRoute => {

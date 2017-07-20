@@ -3,12 +3,12 @@
 #![feature(associated_consts)] 
 extern crate readwrite_comp;
 extern crate rustc_serialize;
-extern crate mydht_base;
 extern crate bincode;
 extern crate rand;
+use rustc_serialize::{Encodable, Decodable};
+use std::fmt::Debug;
 use std::cell::BorrowMutError;
 use std::cell::BorrowError;
-use mydht_base::peer::Peer;
 use std::io::{
   Write,
   Read,
@@ -35,6 +35,22 @@ pub mod last;
 #[cfg(test)]
 pub mod tests;
 
+#[cfg(any(test,feature="mydht-impl"))]
+pub mod mydht;
+
+/// light definition of user with minimal info for tunnel
+pub trait Peer : Encodable + Decodable + Debug + Clone {
+  /// Address definition of peer (could contain more info than address depending on transport)
+  type Address : Encodable + Decodable + Debug + Clone + Eq;
+  /// Read shadowed message for us (asymetric)
+  type ShadRead : ExtRead;
+  /// Write shadowed message to us (asymetric)
+  type ShadWrite : ExtWrite;
+
+  fn get_address(&self) -> &Self::Address;
+  fn new_shadw(&self) -> Self::ShadWrite;
+  fn new_shadr(&self) -> Self::ShadRead;
+}
 /// Required payload to communicate : to reply or return error
 pub trait Info : Sized {
   /// for each peer info to proxy
