@@ -5,17 +5,17 @@ use self::mydht_base::peer::Peer as MPeer;
 
 impl<P : MPeer> TPeer for P {
   type Address = P::Address;
-  type ShadRead = P::Shadow;
-  type ShadWrite = P::Shadow;
+  type ShadRead = P::ShadowRMsg;
+  type ShadWrite = P::ShadowWMsg;
 
   fn get_address(&self) -> &Self::Address {
     self.get_address()
   }
   fn new_shadw(&self) -> Self::ShadWrite {
-    self.get_shadower(true)
+    self.get_shadower_w_msg()
   }
   fn new_shadr(&self) -> Self::ShadRead {
-    self.get_shadower(false)
+    self.get_shadower_r_msg()
   }
 
 }

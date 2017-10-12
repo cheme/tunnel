@@ -5,7 +5,7 @@
 //!
 
 /// Query expect reply, reply does not (reply can reply to reply)
-#[derive(RustcDecodable,RustcEncodable,Debug,Clone,PartialEq,Eq)]
+#[derive(Serialize,Deserialize,Debug,Clone,PartialEq,Eq)]
 pub enum TunnelState {
   // TODO bitunnel need a ReplyCached with sim_key ??? replace actual replycached by SendOnCache
   /// NoTunnel, same as TunnelMode::NoTunnel (TODO remove TunnelMode::NoTunnel when stable)

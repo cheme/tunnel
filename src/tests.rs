@@ -431,7 +431,7 @@ impl<P : Peer> GenTunnelTraits for TestTunnelTraits<P> {
 //
 //impl<E : ExtWrite, P : Peer, RI : RepInfo, EI : Info> TunnelWriter for FullW<RI,EI,P,E> {
 //type TW = FullW<ReplyInfo<TT::LW,TT::P,TT::RW>, MultiErrorInfo<TT::LW,TT::RW>, TT::P, TT::LW>;
-  type RW = FullW<MultipleReplyInfo<Self::P>, MultipleErrorInfo,Self::P, Self::LW,Nope>;
+  type RW = FullW<MultipleReplyInfo<<Self::P as Peer>::Address>, MultipleErrorInfo,Self::P, Self::LW,Nope>;
   //type RW = TunnelWriterFull<FullW<MultipleReplyInfo<Self::LW,Self::P,Nope>, MultiErrorInfo<Self::LW,Nope>,Self::P, Self::LW>>;
   type REP = ReplyInfoProvider<
 //    SizedWindows<TestSizedWindows>,
@@ -537,7 +537,7 @@ pub fn tunnel_test<P : Peer> (  tc : TunnelTestConfig<P>)
 }
 
 fn reply_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr : 
-                         DestFull<FullR<MultipleReplyInfo<P>,MultipleErrorInfo,P,SizedWindows<TestSizedWindows>>,SRead, SizedWindows<TestSizedWindows>>
+                         DestFull<FullR<MultipleReplyInfo<<P as Peer>::Address>,MultipleErrorInfo,P,SizedWindows<TestSizedWindows>>,SRead, SizedWindows<TestSizedWindows>>
                          , mut input : Cursor<Vec<u8>>, tunnel : &mut Full<TestTunnelTraits<P>>)
 {
    let mut ixcache = 127;//half of 8 bit pool
@@ -563,7 +563,7 @@ fn reply_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr :
    send_test(tc, rw, tunnelsrep, output);
 }
 fn reply_cached_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr : 
-                         DestFull<FullR<MultipleReplyInfo<P>,MultipleErrorInfo,P,SizedWindows<TestSizedWindows>>,SRead, SizedWindows<TestSizedWindows>>
+                         DestFull<FullR<MultipleReplyInfo<<P as Peer>::Address>,MultipleErrorInfo,P,SizedWindows<TestSizedWindows>>,SRead, SizedWindows<TestSizedWindows>>
                          , mut input : Cursor<Vec<u8>>, mut tunnels : Vec<Full<TestTunnelTraits<P>>>)
 {
 
@@ -775,7 +775,7 @@ fn send_test<P : Peer, W : ExtWrite> (mut tc : TunnelTestConfig<P>, mut tunn_we 
 
 }
 fn send_error<P : Peer, EW : TunnelErrorWriter> (nbpeer : usize, mut tunn_e : EW, 
-                         mut tunnels : &mut [Full<TestTunnelTraits<P>>])
+                         tunnels : &mut [Full<TestTunnelTraits<P>>])
 {
 
  let mut output = Cursor::new(Vec::new());
@@ -830,37 +830,43 @@ fn peer_tests () -> Vec<PeerTest> {
     nodeid: "toid1".to_string(),
     address : LocalAdd(1),
     keyshift: 2,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
  PeerTest  {
     nodeid: "toid2".to_string(),
     address : LocalAdd(2),
     keyshift: 3,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
  PeerTest {
     nodeid: "toid3".to_string(),
     address : LocalAdd(3),
     keyshift: 4,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
  PeerTest {
     nodeid: "toid4".to_string(),
     address : LocalAdd(4),
     keyshift: 5,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
  PeerTest {
     nodeid: "toid5".to_string(),
     address : LocalAdd(5),
     keyshift: 6,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
  PeerTest {
     nodeid: "toid6".to_string(),
     address : LocalAdd(6),
     keyshift: 5,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
 ].to_vec()
 }
@@ -870,37 +876,43 @@ fn peer_tests_2 () -> Vec<PeerTest> {
     nodeid: "toid1".to_string(),
     address : LocalAdd(1),
     keyshift: 2,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
 PeerTest {
     nodeid: "toid7".to_string(),
     address : LocalAdd(7),
     keyshift: 9,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
  PeerTest  {
     nodeid: "toid8".to_string(),
     address : LocalAdd(8),
     keyshift: 11,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
  PeerTest {
     nodeid: "toid9".to_string(),
     address : LocalAdd(9),
     keyshift: 6,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
  PeerTest {
     nodeid: "toid10".to_string(),
     address : LocalAdd(10),
     keyshift: 2,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
  PeerTest {
     nodeid: "toid11".to_string(),
     address : LocalAdd(11),
     keyshift: 1,
-    modesh : test_peer_mode(),
+    modeshauth : test_peer_mode(),
+    modeshmsg : test_peer_mode(),
 },
 ].to_vec()
 }

@@ -23,10 +23,10 @@ use std::io::{
   Error as IoError,
   ErrorKind as IoErrorKind,
 };
-use bincode::SizeLimit;
-use bincode::rustc_serialize::{
-  encode_into as bin_encode, 
-  decode_from as bin_decode,
+use bincode::Infinite;
+use bincode::{
+  serialize_into as bin_encode, 
+  deserialize_from as bin_decode,
 };
 use super::{
   Peer,
@@ -40,7 +40,6 @@ use super::{
   Info,
   RepInfo,
   BincErr,
-  BindErr,
   BorrMutErr,
   TunnelNoRep,
   Tunnel,
@@ -93,7 +92,7 @@ pub trait GenTunnelTraits {
   type RP : RouteProvider<Self::P>;
   /// Reply writer use only to include a reply envelope
   type RW : TunnelWriterExt;
-  type REP : ReplyProvider<Self::P, MultipleReplyInfo<Self::P>>;
+  type REP : ReplyProvider<Self::P, MultipleReplyInfo<<Self::P as Peer>::Address>>;
   type SP : SymProvider<Self::SSW,Self::SSR>;
   type TNR : TunnelNoRep<P=Self::P,W=Self::RW>;
   type EP : ErrorProvider<Self::P, MultipleErrorInfo>;
@@ -199,7 +198,7 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite, LR : ExtRead> ExtRead for ProxyFu
     }
   }
 
-  fn read_exact_from<R : Read>(&mut self, r : &mut R, mut buf: &mut[u8]) -> Result<()> {
+  fn read_exact_from<R : Read>(&mut self, r : &mut R, buf: &mut[u8]) -> Result<()> {
     match self.kind {
       ProxyFullKind::ReplyCached(_, ref mut rs) => rs.read_exact_from(r, buf),
       ProxyFullKind::QueryOnce(_) | ProxyFullKind::QueryCached(_,_) => self.origin_read.read_exact_from(r,buf),
@@ -279,8 +278,8 @@ pub fn clone_shadows_keys<P : Peer, RI : RepInfo, EI : Info,LW : ExtWrite,TW : T
 }
 impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
   type P = TT::P;
-  type W = FullW<MultipleReplyInfo<TT::P>, MultipleErrorInfo, TT::P, TT::LW,TT::RW>;
-  type TR = FullR<MultipleReplyInfo<TT::P>, MultipleErrorInfo, TT::P, TT::LR>;
+  type W = FullW<MultipleReplyInfo<<TT::P as Peer>::Address>, MultipleErrorInfo, TT::P, TT::LW,TT::RW>;
+  type TR = FullR<MultipleReplyInfo<<TT::P as Peer>::Address>, MultipleErrorInfo, TT::P, TT::LR>;
   /// actual proxy writer : TODO rem like W : directly return writer default impl when stabilized
   type PW = ProxyFull<Self::TR,TT::SSW,TT::LW,TT::LR>;
   /// Dest reader
@@ -449,7 +448,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
         let mut ks : Vec<Vec<u8>>;
         { 
           let mut inr = CompExtRInner(r, &mut or);
-          let len : usize = bin_decode(&mut inr, SizeLimit::Infinite).map_err(|e|BindErr(e))?;
+          let len : usize = bin_decode(&mut inr, Infinite).map_err(|e|BincErr(e))?;
           ks = Vec::with_capacity(len);
           for _ in 0..len {
             current_error_info.as_mut().unwrap().read_read_info(&mut inr)?;// should always be init.
@@ -493,7 +492,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
 
 impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
   // reply info info needed to established conn
-  type RI = MultipleReplyInfo<TT::P>;
+  type RI = MultipleReplyInfo<<TT::P as Peer>::Address>;
   /// no info for a reply on a reply (otherwhise establishing sym tunnel seems better)
   type RW = ReplyWriter<TT::LW, TT::SSW>;
 
@@ -535,10 +534,10 @@ impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
       let mut inr = CompExtRInner(r, tr);
 
         // TODO read from after header!!!!!!!!!!!!!^####### 
-        let mut ritmp : MultipleReplyInfo<TT::P> = MultipleReplyInfo::RouteReply(Vec::new());
+        let mut ritmp : MultipleReplyInfo<<TT::P as Peer>::Address> = MultipleReplyInfo::RouteReply(Vec::new());
         ritmp.read_read_info(&mut inr)?;
         // read add
-        a = bin_decode(&mut inr, SizeLimit::Infinite).map_err(|e|BindErr(e))?;
+        a = bin_decode(&mut inr, Infinite).map_err(|e|BincErr(e))?;
         rep = if let MultipleReplyInfo::RouteReply(v) = ritmp {
           // return writer
           let ssw = CompExtW(self.sym_prov.new_sym_writer(v),self.limiter_proto_w.clone());
@@ -568,9 +567,9 @@ impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
   fn reply_writer_init<R : Read, W : Write> (&mut self, repw : &mut Self::RW, tr : &mut Self::DR, r : &mut R, w : &mut W) -> Result<()> {
     if let &mut ReplyWriter::Route{..} = repw {
       let mut inr = CompExtRInner(r, tr);
-      let state = bin_decode(&mut inr, SizeLimit::Infinite).map_err(|e|BindErr(e))?;
+      let state = bin_decode(&mut inr, Infinite).map_err(|e|BincErr(e))?;
       assert!(if let TunnelState::ReplyOnce = state {true} else {false});
-      bin_encode(&state, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+      bin_encode(w, &state, Infinite).map_err(|e|BincErr(e))?;
       let mut lim_payload = self.limiter_proto_r.clone();
       let mut lim_proxy = self.limiter_proto_w.clone();
       lim_payload.read_header(&mut inr)?;
@@ -766,11 +765,11 @@ impl<TT : GenTunnelTraits> Full<TT> {
 
   // TODO fuse with make_shads (lifetime issue on full : need to open it but first finish
   // make_shads fn
-  fn next_shads (&mut self, p : &TT::P) -> (Shadows<TT::P,MultipleReplyInfo<TT::P>,MultipleErrorInfo,TT::LW,TT::RW>, <TT::P as Peer>::Address) {
+  fn next_shads (&mut self, p : &TT::P) -> (Shadows<TT::P,MultipleReplyInfo<<TT::P as Peer>::Address>,MultipleErrorInfo,TT::LW,TT::RW>, <TT::P as Peer>::Address) {
     let nbpeer;
     let otherroute = if let MultipleReplyMode::OtherRoute = self.reply_mode {true} else{false};
     let revroute : Vec<TT::P>;
-    let mut shad : Vec<TunnelShadowW<TT::P,MultipleReplyInfo<TT::P>,MultipleErrorInfo,TT::LW,TT::RW>>;
+    let mut shad : Vec<TunnelShadowW<TT::P,MultipleReplyInfo<<TT::P as Peer>::Address>,MultipleErrorInfo,TT::LW,TT::RW>>;
     let add;
     { // restrict lifetime of peers for other route reply after
       let peers : Vec<&TT::P> = self.route_prov.new_route(p);
@@ -825,12 +824,12 @@ impl<TT : GenTunnelTraits> Full<TT> {
 
   }
 
-  fn make_shads (&mut self, peers : &[&TT::P]) -> Shadows<TT::P,MultipleReplyInfo<TT::P>,MultipleErrorInfo,TT::LW,TT::RW> {
+  fn make_shads (&mut self, peers : &[&TT::P]) -> Shadows<TT::P,MultipleReplyInfo<<TT::P as Peer>::Address>,MultipleErrorInfo,TT::LW,TT::RW> {
 
     let nbpeer;
     let otherroute = if let MultipleReplyMode::OtherRoute = self.reply_mode {true} else{false};
     let revroute : Vec<TT::P>;
-    let mut shad : Vec<TunnelShadowW<TT::P,MultipleReplyInfo<TT::P>,MultipleErrorInfo,TT::LW,TT::RW>>;
+    let mut shad : Vec<TunnelShadowW<TT::P,MultipleReplyInfo<<TT::P as Peer>::Address>,MultipleErrorInfo,TT::LW,TT::RW>>;
     { // restrict lifetime of peers for other route reply after
       nbpeer = peers.len();
       shad = Vec::with_capacity(nbpeer - 1);
@@ -925,7 +924,7 @@ impl<P : Peer, RI : RepInfo, EI : Info,LW : ExtWrite,TW : TunnelWriterExt> Tunne
 
        let mut cw = Cursor::new(Vec::new());
       // TODO do not bin encode usize
-      bin_encode(&len, &mut cw, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+      bin_encode(&mut cw, &len, Infinite).map_err(|e|BincErr(e))?;
       // notice that we include key from emitter even if it is already written in dest reply info
       // (duplicated : we should not send it to dest (TODO new enum for dest without key))
       for i in 0..len {
@@ -948,10 +947,10 @@ impl<P : Peer, RI : RepInfo, EI : Info,LW : ExtWrite,TW : TunnelWriterExt> ExtWr
   #[inline]
   fn write_header<W : Write>(&mut self, w : &mut W) -> Result<()> {
     // write starte
-    bin_encode(&self.state, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+    bin_encode(w, &self.state, Infinite).map_err(|e|BincErr(e))?;
     // write connect info
     if let Some(cci) = self.current_cache_id.as_ref() {
-      bin_encode(cci, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+      bin_encode(w, cci, Infinite).map_err(|e|BincErr(e))?;
     }
 
     // write connect info 
@@ -1016,7 +1015,7 @@ impl<E : ExtRead, P : Peer, RI : RepInfo, EI : Info> FullR<RI,EI,P,E> {
   /// TODO include in multi read function instead !!
 #[inline]
   pub fn read_cacheid<R : Read> (r : &mut R) -> Result<Vec<u8>> {
-    Ok(try!(bin_decode(r, SizeLimit::Infinite).map_err(|e|BindErr(e))))
+    Ok(try!(bin_decode(r, Infinite).map_err(|e|BincErr(e))))
   }
 
 
@@ -1063,16 +1062,16 @@ impl<E : ExtRead, P : Peer, RI : RepInfo, EI : Info> ExtRead for FullR<RI,EI,P,E
 
 
     // read_state
-    self.state = bin_decode(r, SizeLimit::Infinite).map_err(|e|BindErr(e))?;
+    self.state = bin_decode(r, Infinite).map_err(|e|BincErr(e))?;
 
     // read_connect_info
     // reading for cached reader
     if self.state.do_cache() {
-      self.current_cache_id = Some(bin_decode(r, SizeLimit::Infinite).map_err(|e|BindErr(e))?);
+      self.current_cache_id = Some(bin_decode(r, Infinite).map_err(|e|BincErr(e))?);
     }
 
     if let TunnelState::QErrorCached = self.state {
-      self.error_code = Some(bin_decode(r, SizeLimit::Infinite).map_err(|e|BindErr(e))?);
+      self.error_code = Some(bin_decode(r, Infinite).map_err(|e|BincErr(e))?);
       return Ok(())
     }
 
@@ -1083,9 +1082,9 @@ impl<E : ExtRead, P : Peer, RI : RepInfo, EI : Info> ExtRead for FullR<RI,EI,P,E
 
       let mut inr  = CompExtRInner(r, &mut self.shad);
 
-      self.next_proxy_peer = bin_decode(&mut inr, SizeLimit::Infinite).map_err(|e|BindErr(e))?;
+      self.next_proxy_peer = bin_decode(&mut inr, Infinite).map_err(|e|BincErr(e))?;
 
-      self.tunnel_id = Some(bin_decode(&mut inr, SizeLimit::Infinite).map_err(|e|BindErr(e))?);
+      self.tunnel_id = Some(bin_decode(&mut inr, Infinite).map_err(|e|BincErr(e))?);
 
       self.current_error_info = Some(EI::read_from_header(&mut inr)?);
 
@@ -1095,7 +1094,7 @@ impl<E : ExtRead, P : Peer, RI : RepInfo, EI : Info> ExtRead for FullR<RI,EI,P,E
       //try!(self.rep.write_in_header(&mut inw));
 
       /*    let mut inw  = CompExtWInner(w, &mut self.shad);
-            try!(bin_encode(&self.next_proxy_peer, &mut inw, SizeLimit::Infinite).map_err(|e|BincErr(e)));
+            try!(bin_encode(&self.next_proxy_peer, &mut inw, Infinite).map_err(|e|BincErr(e)));
             */
 
       if ri.require_additional_payload() {
@@ -1198,8 +1197,8 @@ impl<P : Peer, RI : RepInfo, EI : Info,LW : ExtWrite,TW : TunnelWriterExt> ExtWr
     // write basic tunnelinfo and content
     self.shad.write_header(w)?;
     let mut inw  = CompExtWInner(w, &mut self.shad);
-    bin_encode(&self.next_proxy_peer, &mut inw, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
-    bin_encode(&self.tunnel_id, &mut inw, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+    bin_encode(&mut inw, &self.next_proxy_peer, Infinite).map_err(|e|BincErr(e))?;
+    bin_encode(&mut inw, &self.tunnel_id, Infinite).map_err(|e|BincErr(e))?;
     self.err.write_in_header(&mut inw)?;
     self.rep.write_in_header(&mut inw)?;
     if self.rep.require_additional_payload() {
@@ -1240,7 +1239,7 @@ impl<P : Peer, RI : RepInfo, EI : Info,LW : ExtWrite,TW : TunnelWriterExt> ExtWr
         content_limiter.write_end(&mut inw)?;
         rr.write_dest_info_before(&mut inw)?;
         // write first reply peer address
-        bin_encode(add, &mut inw, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+        bin_encode(&mut inw, add, Infinite).map_err(|e|BincErr(e))?;
 
         // write header (simkey are include in headers)
         rr.write_header(&mut inw)?;
@@ -1305,8 +1304,8 @@ impl<SW : ExtWrite,E : ExtWrite> ExtWrite for TunnelCachedWriterExt<SW,E> {
 
   #[inline]
   fn write_header<W : Write>(&mut self, w : &mut W) -> Result<()> {
-    bin_encode(&TunnelState::ReplyCached, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
-    bin_encode(&self.dest_cache_id, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+    bin_encode(w, &TunnelState::ReplyCached, Infinite).map_err(|e|BincErr(e))?;
+    bin_encode(w, &self.dest_cache_id, Infinite).map_err(|e|BincErr(e))?;
     self.shads.write_header(w)
   }
   #[inline]
@@ -1347,13 +1346,13 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite,LR : ExtRead> ExtWrite for ProxyFu
     // write state
     match self.kind {
       ProxyFullKind::ReplyCached(_,_) => 
-     (), //  bin_encode(&TunnelState::ReplyCached, wa, SizeLimit::Infinite).map_err(|e|BincErr(e))?,
+     (), //  bin_encode(&TunnelState::ReplyCached, wa, Infinite).map_err(|e|BincErr(e))?,
       ProxyFullKind::QueryCached(_,_) =>
-        bin_encode(&TunnelState::QueryCached, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?,
+        bin_encode(w, &TunnelState::QueryCached, Infinite).map_err(|e|BincErr(e))?,
       ProxyFullKind::QueryOnce(_) =>
-        bin_encode(&TunnelState::QueryOnce, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?,
+        bin_encode(w, &TunnelState::QueryOnce, Infinite).map_err(|e|BincErr(e))?,
       ProxyFullKind::ReplyOnce(_,_,_,_,_) =>
-        bin_encode(&TunnelState::ReplyOnce, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?,
+        bin_encode(w, &TunnelState::ReplyOnce, Infinite).map_err(|e|BincErr(e))?,
     }
    
    
@@ -1362,12 +1361,12 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite,LR : ExtRead> ExtWrite for ProxyFu
     match self.kind {
       ProxyFullKind::ReplyCached(_,_) => {
     //    let k = &c.try_borrow().map_err(|e|BorrErr(e))?.dest_cache_id;
-    //    bin_encode(k, wa, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+    //    bin_encode(k, wa, Infinite).map_err(|e|BincErr(e))?;
       },
       ProxyFullKind::QueryOnce(_) => (),
       ProxyFullKind::ReplyOnce(_,_,_,_,_) => (),
       ProxyFullKind::QueryCached(ref k,_) =>
-        bin_encode(k, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?,
+        bin_encode(w, k, Infinite).map_err(|e|BincErr(e))?,
     }
    
     // write tunnel header
@@ -1493,7 +1492,7 @@ impl<OR : ExtRead,SR : ExtRead, E : ExtRead> ExtRead for DestFull<OR,SR,E> {
     }
   }
 
-  fn read_exact_from<R : Read>(&mut self, r : &mut R, mut buf: &mut[u8]) -> Result<()> {
+  fn read_exact_from<R : Read>(&mut self, r : &mut R, buf: &mut[u8]) -> Result<()> {
     match self.kind {
       DestFullKind::Multi(ref mut rs) => rs.read_exact_from(r, buf),
       DestFullKind::MultiRc(ref mut rs, ref mut lim) => {
@@ -1609,9 +1608,9 @@ impl TunnelErrorWriter for ErrorWriter {
     match *self {
       ErrorWriter::CachedRoute { code : ref c, dest_cache_id : ref dcid } => {
 //   TunnelState tci1 (1 errorcode3)
-        bin_encode(&TunnelState::QErrorCached, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
-        bin_encode(dcid, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
-        bin_encode(c, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+        bin_encode(w, &TunnelState::QErrorCached, Infinite).map_err(|e|BincErr(e))?;
+        bin_encode(w, dcid, Infinite).map_err(|e|BincErr(e))?;
+        bin_encode(w, c, Infinite).map_err(|e|BincErr(e))?;
       }
     }
     Ok(())

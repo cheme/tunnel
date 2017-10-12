@@ -11,10 +11,11 @@ default = []
 mydht-impl = ["mydht-base"]
 
 [dependencies]
-log = "0.3.4"
-rand = "0.3.11"
-rustc-serialize = "0.3.16"
-bincode = "0.5.0"
+log = "~0.3.4"
+rand = "~0.3.17"
+bincode = "~0.8.0"
+serde = { version = "~1.0.10", features = ["rc"]}
+serde_derive = "~1.0.10"
 
 [dependencies.readwrite-comp]
 #path = "../readwrite-comp/"

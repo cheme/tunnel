@@ -5,25 +5,31 @@ use rand::os::OsRng;
 use rand::Rng;
 use super::super::{
   BincErr,
-  BindErr,
   Info,
   ErrorProvider,
   Peer,
 };
 /// wrong use need redesign TODO redesign it on specific trait (not TW as param)
-use bincode::SizeLimit;
-use bincode::rustc_serialize::{
-  encode_into as bin_encode, 
-  decode_from as bin_decode,
+use bincode::Infinite;
+use bincode::{
+  serialize_into as bin_encode, 
+  deserialize_from as bin_decode,
 };
 use std::io::{
   Write,
   Read,
   Result,
 };
+use serde::{
+  Serialize, 
+  Deserialize, 
+  Serializer, 
+  Deserializer,
+};
+use serde::de::DeserializeOwned;
 
 
-#[derive(RustcDecodable,RustcEncodable,Debug,Clone,PartialEq,Eq)]
+#[derive(Serialize,Deserialize,Debug,Clone,PartialEq,Eq)]
 pub enum MultipleErrorMode {
   /// do not propagate errors
   NoHandling,
@@ -36,7 +42,7 @@ pub enum MultipleErrorMode {
 /// Only QueryCached error here
 /// With multiple reply route, it could also be use in other case (ReplyCached to switch to other
 /// route for instance)
-#[derive(RustcDecodable,RustcEncodable,Debug,Clone)]
+#[derive(Serialize,Deserialize,Debug,Clone)]
 pub enum MultipleErrorInfo {
   NoHandling,
 //  Route(usize), // usize is error code (even if we reply with full route we still consider error code only
@@ -56,7 +62,7 @@ impl Info for MultipleErrorInfo {
   }
 
   fn write_in_header<W : Write>(&mut self, inw : &mut W) -> Result<()> {
-    bin_encode(self, inw, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+    bin_encode(inw, self, Infinite).map_err(|e|BincErr(e))?;
     Ok(())
   }
 
@@ -66,7 +72,7 @@ impl Info for MultipleErrorInfo {
   }
 
   fn read_from_header<R : Read>(r : &mut R) -> Result<Self> {
-    Ok(bin_decode(r, SizeLimit::Infinite).map_err(|e|BindErr(e))?)
+    Ok(bin_decode(r, Infinite).map_err(|e|BincErr(e))?)
   }
 
   #[inline]

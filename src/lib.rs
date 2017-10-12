@@ -1,11 +1,18 @@
 //! TODO ErrorInfo and ReplyInfo abstraction useless??
 //! TODO review all unwrap as most should only return an error, and program could fail very easilly
-#![feature(associated_consts)] 
 extern crate readwrite_comp;
-extern crate rustc_serialize;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate bincode;
 extern crate rand;
-use rustc_serialize::{Encodable, Decodable};
+use serde::{
+  Serialize, 
+  Deserialize, 
+  Serializer, 
+  Deserializer,
+};
+use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 use std::cell::BorrowMutError;
 use std::cell::BorrowError;
@@ -22,8 +29,7 @@ use readwrite_comp::{
 };
 
 //use std::marker::Reflect;
-use bincode::rustc_serialize::EncodingError as BincError;
-use bincode::rustc_serialize::DecodingError as BindError;
+use bincode::Error as BincError;
 
 
 pub mod info;
@@ -39,9 +45,9 @@ pub mod tests;
 pub mod mydht;
 
 /// light definition of user with minimal info for tunnel
-pub trait Peer : Encodable + Decodable + Debug + Clone {
+pub trait Peer : Debug + Clone {
   /// Address definition of peer (could contain more info than address depending on transport)
-  type Address : Encodable + Decodable + Debug + Clone + Eq;
+  type Address : Serialize + DeserializeOwned + Debug + Clone + Eq;
   /// Read shadowed message for us (asymetric)
   type ShadRead : ExtRead;
   /// Write shadowed message to us (asymetric)
@@ -317,13 +323,6 @@ impl From<BorrErr> for IoError {
 }
 
 
-pub struct BindErr(BindError);
-impl From<BindErr> for IoError {
-  #[inline]
-  fn from(e : BindErr) -> IoError {
-    IoError::new(IoErrorKind::Other, e.0)
-  }
-}
 /// Cache for tunnel : mydht cache is not use directly, but it a mydht
 /// cache can implement it very straight forwardly (trait is minimal here) except for creating a
 /// key

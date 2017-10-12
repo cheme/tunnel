@@ -5,28 +5,35 @@
 use std::marker::PhantomData;
 use super::super::{
   BincErr,
-  BindErr,
   RepInfo,
   Info,
   ReplyProvider,
   SymProvider,
   Peer,
 };
-use bincode::SizeLimit;
-use bincode::rustc_serialize::{
-  encode_into as bin_encode, 
-  decode_from as bin_decode, 
+use bincode::Infinite;
+use bincode::{
+  serialize_into as bin_encode, 
+  deserialize_from as bin_decode, 
 };
 use std::io::{
   Write,
   Read,
   Result,
 };
+use serde::{
+  Serialize, 
+  Deserialize, 
+  Serializer, 
+  Deserializer,
+};
+use serde::de::DeserializeOwned;
+
 
 
 /// Possible multiple reply handling implementation
 /// Cost of an enum, it is mainly for testing,c
-#[derive(RustcDecodable,RustcEncodable,Debug,Clone,PartialEq,Eq)]
+#[derive(Serialize,Deserialize,Debug,Clone,PartialEq,Eq)]
 pub enum MultipleReplyMode {
   /// do not propagate errors
   NoHandling,
@@ -49,10 +56,10 @@ pub enum MultipleReplyMode {
 /// Error handle info include in frame, also use for reply
 /// TODO split as ReplyInfo is split
 /// TODO generic not in tunnel
-#[derive(RustcDecodable,RustcEncodable,Debug,Clone)]
-pub enum MultipleReplyInfo<P : Peer> {
+#[derive(Serialize,Deserialize,Debug,Clone)]
+pub enum MultipleReplyInfo<A> {
   NoHandling,
-  KnownDest(<P as Peer>::Address), // TODO add reply mode ?? TODO address instead of key??
+  KnownDest(A), // TODO add reply mode ?? TODO address instead of key??
   Route, // route headers are to be read afterward, contains sym key
   /// reply info include in route after content
   RouteReply(Vec<u8>), // route headers are to be read afterward, contains sym key
@@ -74,7 +81,7 @@ pub enum MultipleReplyInfo<P : Peer> {
   //replyroute : Option<Box<(E,TunnelWriterFull<E,P,TW>)>>,
 }*/
 
-impl<P : Peer> Info for MultipleReplyInfo<P> {
+impl<A : Serialize + DeserializeOwned + Clone + Eq> Info for MultipleReplyInfo<A> {
 
   #[inline]
   fn do_cache (&self) -> bool {
@@ -87,7 +94,7 @@ impl<P : Peer> Info for MultipleReplyInfo<P> {
 
 
   fn write_in_header<W : Write>(&mut self, inw : &mut W) -> Result<()> {
-    bin_encode(self, inw, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+    bin_encode(inw, self, Infinite).map_err(|e|BincErr(e))?;
 
 //    if self.info.do_cache() { 
 
@@ -112,25 +119,25 @@ impl<P : Peer> Info for MultipleReplyInfo<P> {
 
   fn write_read_info<W : Write>(&mut self, w : &mut W) -> Result<()> {
     if let &mut MultipleReplyInfo::RouteReply(ref k) = self {
-      bin_encode(k, w, SizeLimit::Infinite).map_err(|e|BincErr(e))?;
+      bin_encode(w,k, Infinite).map_err(|e|BincErr(e))?;
     }
     Ok(())
   }
   fn read_from_header<R : Read>(r : &mut R) -> Result<Self> {
-    Ok(bin_decode(r, SizeLimit::Infinite).map_err(|e|BindErr(e))?)
+    Ok(bin_decode(r, Infinite).map_err(|e|BincErr(e))?)
   }
 
   fn read_read_info<R : Read>(&mut self, r : &mut R) -> Result<()> {
     // as dest this is called multiple times and thus we redifine it
     if let &mut MultipleReplyInfo::RouteReply(ref mut k) = self {
-       *k = bin_decode(r, SizeLimit::Infinite).map_err(|e|BindErr(e))?;
+       *k = bin_decode(r, Infinite).map_err(|e|BincErr(e))?;
     }
     Ok(())
   }
 
 }
 
-impl<P : Peer> RepInfo for MultipleReplyInfo<P> {
+impl<A : Serialize + DeserializeOwned + Clone + Eq> RepInfo for MultipleReplyInfo<A> {
   #[inline]
   fn require_additional_payload(&self) -> bool {
     if let &MultipleReplyInfo::Route = self { true } else {false}
@@ -175,10 +182,10 @@ impl<P:Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> SymProvider<SSW,SSR> for ReplyInf
 
 }
 
-impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> ReplyProvider<P, MultipleReplyInfo<P>> for ReplyInfoProvider<P,SSW,SSR,SP> {
+impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> ReplyProvider<P, MultipleReplyInfo<<P as Peer>::Address>> for ReplyInfoProvider<P,SSW,SSR,SP> {
 
   /// Error infos bases for peers
-  fn new_reply (&mut self, route : &[&P]) -> Vec<MultipleReplyInfo<P>> {
+  fn new_reply (&mut self, route : &[&P]) -> Vec<MultipleReplyInfo<<P as Peer>::Address>> {
      let l = route.len();
      match self.mode {
        MultipleReplyMode::NoHandling => vec![MultipleReplyInfo::NoHandling;l-1],
@@ -201,14 +208,14 @@ impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> ReplyProvider<P, MultipleReplyI
        },
 
        MultipleReplyMode::RouteReply => {
-         let mut res : Vec<MultipleReplyInfo<P>> = Vec::with_capacity(l-1);
+         let mut res : Vec<MultipleReplyInfo<_>> = Vec::with_capacity(l-1);
          for _ in 1..l {
            res.push(MultipleReplyInfo::RouteReply(self.new_sym_key()))
          }
          res
        },
        MultipleReplyMode::CachedRoute => {
-         let mut res : Vec<MultipleReplyInfo<P>> = Vec::with_capacity(l-1);
+         let mut res : Vec<MultipleReplyInfo<_>> = Vec::with_capacity(l-1);
          for _ in 1..l {
            res.push(MultipleReplyInfo::CachedRoute(self.new_sym_key()))
          }
@@ -221,9 +228,9 @@ impl<P : Peer,SSW,SSR,SP : SymProvider<SSW,SSR>> ReplyProvider<P, MultipleReplyI
 /// specific provider for no rpe
 pub struct NoMultiRepProvider;
 
-impl<P : Peer> ReplyProvider<P, MultipleReplyInfo<P>> for NoMultiRepProvider {
+impl<P : Peer> ReplyProvider<P, MultipleReplyInfo<<P as Peer>::Address>> for NoMultiRepProvider {
   #[inline]
-  fn new_reply (&mut self, p : &[&P]) -> Vec<MultipleReplyInfo<P>> {
+  fn new_reply (&mut self, p : &[&P]) -> Vec<MultipleReplyInfo<<P as Peer>::Address>> {
     vec![MultipleReplyInfo::NoHandling;p.len()-1]
   }
 }
