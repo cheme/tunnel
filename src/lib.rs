@@ -70,7 +70,6 @@ pub trait Info : Sized {
   /// this info for reply or error routing
   /// If we need cache, reply info must be kept by using a reply key
   fn do_cache (&self) -> bool;
-
 }
 
 pub trait RepInfo : Info {
