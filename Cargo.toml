@@ -30,6 +30,11 @@ optional = true
 #path = "../mydht/mydht/mydht-basetest/"
 git = "https://github.com/cheme/mydht.git"
 
+[dev-dependencies.sized_windows_lim]
+#path = "../mydht/mydht/mydht-basetest/"
+git = "https://github.com/cheme/readwrite-comp.git"
+
+
 [dev-dependencies.mydht-base]
 #path = "../mydht/mydht/mydht-base/"
 git = "https://github.com/cheme/mydht.git"

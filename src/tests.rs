@@ -1,4 +1,5 @@
 extern crate mydht_basetest;
+extern crate sized_windows_lim;
 extern crate mydht_base;
 use rand::thread_rng;
 use rand::Rng;
@@ -64,7 +65,7 @@ use self::mydht_basetest::shadow::{
   ShadowTest,
   ShadowModeTest,
 };
-use self::mydht_base::bytes_wr::sized_windows::{
+use self::sized_windows_lim::{
   SizedWindowsParams,
   SizedWindows,
 };
