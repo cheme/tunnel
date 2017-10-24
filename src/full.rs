@@ -1,7 +1,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use rand::ThreadRng;
+use rand::OsRng;
 use rand::Rng;
 use readwrite_comp::{
   MultiWExt,
@@ -114,7 +114,7 @@ pub struct Full<TT : GenTunnelTraits> {
   pub sym_prov : TT::SP,
   pub tunrep : TT::TNR,
   pub error_prov : TT::EP,
-  pub rng : ThreadRng,
+  pub rng : OsRng,
   pub limiter_proto_w : TT::LW,
   pub limiter_proto_r : TT::LR,
   pub reply_once_buf_size : usize,
