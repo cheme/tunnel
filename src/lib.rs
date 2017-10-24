@@ -188,11 +188,11 @@ Self::TR : TunnelReader<RI=Self::RI>
 
   fn put_symw(&mut self, Vec<u8>, Self::SSCW, <Self::P as Peer>::Address) -> Result<()>;
 
-  fn get_symw(&mut self, &Vec<u8>) -> Result<(Self::SSCW,<Self::P as Peer>::Address)>;
+  fn remove_symw(&mut self, &Vec<u8>) -> Result<(Self::SSCW,<Self::P as Peer>::Address)>;
 
   fn put_symr(&mut self, Self::SSCR) -> Result<Vec<u8>>;
 
-  fn get_symr(&mut self, &Vec<u8>) -> Result<Self::SSCR>;
+  fn remove_symr(&mut self, &Vec<u8>) -> Result<Self::SSCR>;
 
 
   fn use_sym_exchange (&Self::RI) -> bool;
@@ -329,12 +329,14 @@ impl From<BorrErr> for IoError {
 pub trait TunnelCache<SSW,SSR> {
   fn put_symw_tunnel(&mut self, Vec<u8>, SSW) -> Result<()>;
   fn get_symw_tunnel(&mut self, &Vec<u8>) -> Result<&mut SSW>;
+  fn remove_symw_tunnel(&mut self, &Vec<u8>) -> Result<SSW>;
   fn has_symw_tunnel(&mut self, k : &Vec<u8>) -> bool {
     self.get_symw_tunnel(k).is_ok()
   }
 
   fn put_symr_tunnel(&mut self, SSR) -> Result<Vec<u8>>;
   fn get_symr_tunnel(&mut self, &Vec<u8>) -> Result<&mut SSR>;
+  fn remove_symr_tunnel(&mut self, &Vec<u8>) -> Result<SSR>;
   fn has_symr_tunnel(&mut self, k : &Vec<u8>) -> bool {
     self.get_symr_tunnel(k).is_ok()
   }

@@ -1,6 +1,4 @@
 
-use std::rc::Rc;
-use std::cell::RefCell;
 use rand::OsRng;
 use rand::Rng;
 use readwrite_comp::{
@@ -86,7 +84,7 @@ pub trait GenTunnelTraits {
   type LR : ExtRead + Clone; // limiter
   type SSW : ExtWrite;// symetric writer
   type SSR : ExtRead;// seems userless (in rpely provider if needed)
-  type TC : TunnelCache<(TunnelCachedWriterExtClone<Self::SSW,Self::LW>,<Self::P as Peer>::Address),TunnelCachedReaderExtClone<Self::SSR>>
+  type TC : TunnelCache<(TunnelCachedWriterExt<Self::SSW,Self::LW>,<Self::P as Peer>::Address),MultiRExt<Self::SSR>>
     + TunnelCacheErr<(ErrorWriter,<Self::P as Peer>::Address), MultipleErrorInfo> + CacheIdProducer;
   type EW : TunnelErrorWriter;
   type RP : RouteProvider<Self::P>;
@@ -234,7 +232,7 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite, LR : ExtRead> ExtRead for ProxyFu
 /// or nothing proxy as previously read (continue reading from origin read)
 pub enum ProxyFullKind<SW : ExtWrite, LW : ExtWrite, LR : ExtRead> {
   /// end original read done in proxy init (TODO) and proxy as is then proxy content with symetric enc aka ReplyCached, last is key
-  ReplyCached(TunnelCachedWriterExtClone<SW,LW>,LR),
+  ReplyCached(TunnelCachedWriterExt<SW,LW>,LR),
   /// continue reading from original read and write as is, add cache id if the state if info from
   /// cache or added to cache : aka queryonce, 
   QueryOnce(LW),
@@ -396,8 +394,8 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
       },
       TunnelState::ReplyCached => {
 
-        let (tcw,addref) = self.get_symw(or.current_cache_id.as_ref().unwrap())?;
-        (ProxyFullKind::ReplyCached(tcw.clone(),or.content_limiter.clone()),addref.clone())
+        let (tcw,addref) = self.remove_symw(or.current_cache_id.as_ref().unwrap())?;
+        (ProxyFullKind::ReplyCached(tcw,or.content_limiter.clone()),addref.clone())
       },
       TunnelState::QueryOnce => {
         (ProxyFullKind::QueryOnce(self.limiter_proto_w.clone()), or.next_proxy_peer.clone().unwrap())
@@ -473,7 +471,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
       },
       TunnelState::ReplyCached => {
         // TODO this unwrap can break : remove
-        let cr = self.get_symr(or.current_cache_id.as_ref().unwrap())?;
+        let cr = self.remove_symr(or.current_cache_id.as_ref().unwrap())?;
         let cl = or.content_limiter.clone();
         Ok(DestFull {
           origin_read : or,
@@ -688,25 +686,25 @@ pub fn identify_cached_errcode (mut err_code : usize, route : &[MultipleErrorInf
 impl<TT : GenTunnelTraits> TunnelManager for Full<TT> {
 
   // Shadow Sym (if established con)
-  type SSCW = TunnelCachedWriterExtClone<TT::SSW,TT::LW>;
+  type SSCW = TunnelCachedWriterExt<TT::SSW,TT::LW>;
   // Shadow Sym (if established con)
-  type SSCR = TunnelCachedReaderExtClone<TT::SSR>;
+  type SSCR = MultiRExt<TT::SSR>;
 
   fn put_symw(&mut self, k : Vec<u8>, w : Self::SSCW, dest : <Self::P as Peer>::Address) -> Result<()> {
     self.cache.put_symw_tunnel(k,(w,dest))
   }
 
-  fn get_symw(&mut self, k : &Vec<u8>) -> Result<(Self::SSCW,<Self::P as Peer>::Address)> {
-    let r = try!(self.cache.get_symw_tunnel(k));
-    Ok(r.clone())
+  fn remove_symw(&mut self, k : &Vec<u8>) -> Result<(Self::SSCW,<Self::P as Peer>::Address)> {
+    let r = try!(self.cache.remove_symw_tunnel(k));
+    Ok(r)
   }
   fn put_symr(&mut self, w : Self::SSCR) -> Result<Vec<u8>> {
     self.cache.put_symr_tunnel(w)
   }
 
-  fn get_symr(&mut self, k : &Vec<u8>) -> Result<Self::SSCR> {
-    let r = self.cache.get_symr_tunnel(k)?;
-    Ok(r.clone())
+  fn remove_symr(&mut self, k : &Vec<u8>) -> Result<Self::SSCR> {
+    let r = self.cache.remove_symr_tunnel(k)?;
+    Ok(r)
   }
 
   fn use_sym_exchange (ri : &Self::RI) -> bool {
@@ -714,11 +712,11 @@ impl<TT : GenTunnelTraits> TunnelManager for Full<TT> {
   }
 
   fn new_sym_writer (&mut self, sk : Vec<u8>, p_cache_id : Vec<u8>) -> Self::SSCW {
-    Rc::new(RefCell::new(TunnelCachedWriterExt::new(self.sym_prov.new_sym_writer(sk), p_cache_id, self.limiter_proto_w.clone())))
+    TunnelCachedWriterExt::new(self.sym_prov.new_sym_writer(sk), p_cache_id, self.limiter_proto_w.clone())
   }
 
   fn new_dest_sym_reader (&mut self, ks : Vec<Vec<u8>>) -> Self::SSCR {
-    Rc::new(RefCell::new(MultiRExt::new(ks.into_iter().map(|k|self.sym_prov.new_sym_reader(k)).collect())))
+    MultiRExt::new(ks.into_iter().map(|k|self.sym_prov.new_sym_reader(k)).collect())
   }
 
 }
@@ -1288,7 +1286,6 @@ pub struct TunnelCachedWriterExt<SW : ExtWrite,E : ExtWrite> {
 // TODO ??  dest_address: Vec<u8>,
 }
 
-pub type TunnelCachedWriterExtClone<SW,E> = Rc<RefCell<(TunnelCachedWriterExt<SW,E>)>>;
 impl<SW : ExtWrite,E : ExtWrite> TunnelCachedWriterExt<SW,E> {
   pub fn new (sim : SW, next_cache_id : Vec<u8>, limit : E) -> Self
   {
@@ -1452,7 +1449,6 @@ impl<OR : ExtRead,SW : ExtWrite, E : ExtWrite,LR : ExtRead> ExtWrite for ProxyFu
  */
 pub type TunnelCachedReaderExt<SR,E> = CompExtR<MultiRExt<SR>,E>;
 
-pub type TunnelCachedReaderExtClone<SR> =Rc<RefCell<MultiRExt<SR>>>;
 fn new_dest_cached_reader_ext<SR : ExtRead, E : ExtRead> (sim : Vec<SR>, limit : E) -> TunnelCachedReaderExt<SR,E> {
   CompExtR(MultiRExt::new(sim), limit)
 }
@@ -1475,7 +1471,7 @@ impl<OR : ExtRead,SR : ExtRead, E : ExtRead> ExtRead for DestFull<OR,SR,E> {
       DestFullKind::Multi(ref mut rs) => rs.read_header(r),
       DestFullKind::MultiRc(ref mut rs, ref mut lim) => {
         let mut inr = CompExtRInner(r, lim);
-        rs.try_borrow_mut().map_err(|e|BorrMutErr(e))?.read_header(&mut inr)
+        rs.read_header(&mut inr)
       },
       DestFullKind::Id => Ok(()),
     }
@@ -1486,7 +1482,7 @@ impl<OR : ExtRead,SR : ExtRead, E : ExtRead> ExtRead for DestFull<OR,SR,E> {
       DestFullKind::Multi(ref mut rs) => rs.read_from(r,buf),
       DestFullKind::MultiRc(ref mut rs, ref mut lim) => {
         let mut inr = CompExtRInner(r, lim);
-        rs.try_borrow_mut().map_err(|e|BorrMutErr(e))?.read_from(&mut inr,buf)
+        rs.read_from(&mut inr,buf)
       },
       DestFullKind::Id => self.origin_read.read_from(r,buf),
     }
@@ -1497,7 +1493,7 @@ impl<OR : ExtRead,SR : ExtRead, E : ExtRead> ExtRead for DestFull<OR,SR,E> {
       DestFullKind::Multi(ref mut rs) => rs.read_exact_from(r, buf),
       DestFullKind::MultiRc(ref mut rs, ref mut lim) => {
         let mut inr = CompExtRInner(r, lim);
-        rs.try_borrow_mut().map_err(|e|BorrMutErr(e))?.read_exact_from(&mut inr,buf)
+        rs.read_exact_from(&mut inr,buf)
       },
       DestFullKind::Id => self.origin_read.read_exact_from(r,buf),
     }
@@ -1508,7 +1504,7 @@ impl<OR : ExtRead,SR : ExtRead, E : ExtRead> ExtRead for DestFull<OR,SR,E> {
       DestFullKind::Multi(ref mut rs) => rs.read_end(r),
       DestFullKind::MultiRc(ref mut rs, ref mut lim) => {
         { let mut inr = CompExtRInner(r, lim);
-        rs.try_borrow_mut().map_err(|e|BorrMutErr(e))?.read_end(&mut inr)?;
+        rs.read_end(&mut inr)?;
         }
         lim.read_end(r)
       },
@@ -1521,7 +1517,7 @@ impl<OR : ExtRead,SR : ExtRead, E : ExtRead> ExtRead for DestFull<OR,SR,E> {
 pub enum DestFullKind<SR : ExtRead, LR : ExtRead> {
   /// Multi : for reply
   Multi(TunnelCachedReaderExt<SR,LR>),
-  MultiRc(TunnelCachedReaderExtClone<SR>,LR),
+  MultiRc(MultiRExt<SR>,LR),
   /// Nothing directly ok
   Id,
 }

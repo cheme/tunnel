@@ -27,8 +27,7 @@ use super::full::{
   DestFull,
   FullR,
   GenTunnelTraits,
-  TunnelCachedWriterExtClone,
-  TunnelCachedReaderExtClone,
+  TunnelCachedWriterExt,
   FullW,
 };
 use super::info::multi::{
@@ -54,6 +53,7 @@ use readwrite_comp::{
   ExtRead,
   ExtWrite,
   CompW,
+  MultiRExt,
 };
 use self::mydht_basetest::peer::{
   PeerTest,
@@ -90,8 +90,8 @@ impl SizedWindowsParams for TestSizedWindows {
     const SECURE_PAD : bool = false;
 }
 
-type CachedR = TunnelCachedReaderExtClone<SRead>;
-type CachedW = TunnelCachedWriterExtClone<SWrite,SizedWindows<TestSizedWindows>>;
+type CachedR = MultiRExt<SRead>;
+type CachedW = TunnelCachedWriterExt<SWrite,SizedWindows<TestSizedWindows>>;
 
 pub struct CachedInfo<P : Peer> {
   // TODO rename field plus rem option
@@ -198,20 +198,28 @@ impl<P : Peer> TunnelCache<(CachedW,<P as Peer>::Address),CachedR> for CachedInf
   }
 
   fn get_symw_tunnel(&mut self, k : &Vec<u8>) -> Result<&mut (CachedW,<P as Peer>::Address)> {
-    for i in self.1 .. self.0.len() {
+    for i in 0 .. self.0.len() {
       if self.0[i].prev_peer == *k {
-        self.1 = i;
-        return Ok(self.0[i].cached_key.as_mut().unwrap())
-      }
-    };
-    for i in 0 .. self.1 {
-      if self.0[i].prev_peer == *k {
-        self.1 = i;
         return Ok(self.0[i].cached_key.as_mut().unwrap())
       }
     };
     Err(Error::new(ErrorKind::Other, "Missing content : TODO change trait to return an option in result"))
   }
+  fn remove_symw_tunnel(&mut self, k : &Vec<u8>) -> Result<(CachedW,<P as Peer>::Address)> {
+    for i in 0 .. self.0.len() {
+      if self.0[i].prev_peer == *k {
+        let v = self.0.swap_remove(i);
+        if i == self.0.len() {
+          self.1 = 0;
+        } else {
+          self.1 = i;
+        }
+        return Ok(v.cached_key.unwrap())
+      }
+    };
+    Err(Error::new(ErrorKind::Other, "Missing content : TODO change trait to return an option in result"))
+  }
+
 
   fn has_symw_tunnel(&mut self, k : &Vec<u8>) -> bool {
     self.get_symw_tunnel(k).is_ok()
@@ -226,21 +234,24 @@ impl<P : Peer> TunnelCache<(CachedW,<P as Peer>::Address),CachedR> for CachedInf
     Ok(k)
   }
   fn get_symr_tunnel(&mut self, k : &Vec<u8>) -> Result<&mut CachedR> {
-    for i in self.4 .. self.3.len() {
+    for i in 0 .. self.3.len() {
       if self.3[i].prev_peer == *k {
-        self.4 = i;
-        return Ok(self.3[i].cached_key.as_mut().unwrap())
-      }
-    };
-    for i in 0 .. self.4 {
-      if self.3[i].prev_peer == *k {
-        self.4 = i;
         return Ok(self.3[i].cached_key.as_mut().unwrap())
       }
     };
 
     Err(Error::new(ErrorKind::Other, "Missing content : TODO change trait to return an option in result"))
   }
+  fn remove_symr_tunnel(&mut self, k : &Vec<u8>) -> Result<CachedR> {
+    for i in 0 .. self.3.len() {
+      if self.3[i].prev_peer == *k {
+        let v = self.3.swap_remove(i);
+        return Ok(v.cached_key.unwrap())
+      }
+    };
+    Err(Error::new(ErrorKind::Other, "Missing content : TODO change trait to return an option in result"))
+  }
+
 
 }
 

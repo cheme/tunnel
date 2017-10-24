@@ -180,6 +180,11 @@ impl<SSW,SSR> TunnelCache<SSW,SSR> for Nope {
     // TODO replace with actual erro
     unimplemented!()
   }
+  fn remove_symw_tunnel(&mut self, _ : &Vec<u8>) -> Result<SSW> {
+    // TODO replace with actual erro
+    unimplemented!()
+  }
+
 
   fn has_symw_tunnel(&mut self, _ : &Vec<u8>) -> bool {
     false
@@ -193,6 +198,11 @@ impl<SSW,SSR> TunnelCache<SSW,SSR> for Nope {
     // TODO replace with actual erro
     unimplemented!()
   }
+  fn remove_symr_tunnel(&mut self, _ : &Vec<u8>) -> Result<SSR> {
+    // TODO replace with actual erro
+    unimplemented!()
+  }
+ 
   fn has_symr_tunnel(&mut self, _ : &Vec<u8>) -> bool {
     false
   }
