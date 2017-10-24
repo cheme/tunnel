@@ -8,7 +8,6 @@ authors = ["Emeric Chevalier <emericchevalier.pro@gmail.com>"]
 
 [features]
 default = []
-mydht-impl = ["mydht-base"]
 
 [dependencies]
 log = "~0.3.4"
@@ -20,11 +19,6 @@ serde_derive = "~1.0.10"
 [dependencies.readwrite-comp]
 #path = "../readwrite-comp/"
 git = "https://github.com/cheme/readwrite-comp.git"
-
-[dependencies.mydht-base]
-#path = "../mydht/mydht/mydht-base/"
-git = "https://github.com/cheme/mydht.git"
-optional = true
 
 [dev-dependencies.mydht-basetest]
 #path = "../mydht/mydht/mydht-basetest/"

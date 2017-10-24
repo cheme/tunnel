@@ -41,7 +41,7 @@ pub mod last;
 #[cfg(test)]
 pub mod tests;
 
-#[cfg(any(test,feature="mydht-impl"))]
+#[cfg(test)]
 pub mod mydht;
 
 /// light definition of user with minimal info for tunnel
