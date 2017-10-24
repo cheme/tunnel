@@ -122,48 +122,48 @@ pub struct CachedInfoR {
 /// second usize is next get index (starting at 0), last is cache id last ix
 pub struct CachedInfoManager<P : Peer> (Vec<CachedInfo<P>>, usize, usize,Vec<CachedInfoR>,usize,Vec<CachedInfoE<P>>,usize,Vec<CachedInfoEI>,usize);
 impl<P : Peer> TunnelCacheErr<(ErrorWriter,<P as Peer>::Address), MultipleErrorInfo> for CachedInfoManager<P> {
-   fn put_errw_tunnel(&mut self, k : &[u8], ssw : (ErrorWriter,<P as Peer>::Address)) -> Result<()> {
+   fn put_errw_tunnel(&mut self, k : Vec<u8>, ssw : (ErrorWriter,<P as Peer>::Address)) -> Result<()> {
     // TODO remove if one...
     self.5.push(CachedInfoE{
       cached_key : Some(ssw),
-      prev_peer : k.to_vec(),
+      prev_peer : k,
     });
     Ok(())
   }
 
-  fn get_errw_tunnel(&mut self, k : &[u8]) -> Result<&mut (ErrorWriter,<P as Peer>::Address)> {
+  fn get_errw_tunnel(&mut self, k : &Vec<u8>) -> Result<&mut (ErrorWriter,<P as Peer>::Address)> {
     for i in self.6 .. self.5.len() {
-      if self.5[i].prev_peer == k {
+      if self.5[i].prev_peer == *k {
         self.6 = i;
         return Ok(self.5[i].cached_key.as_mut().unwrap())
       }
     };
     for i in 0 .. self.6 {
-      if self.5[i].prev_peer == k {
+      if self.5[i].prev_peer == *k {
         self.6 = i;
         return Ok(self.5[i].cached_key.as_mut().unwrap())
       }
     };
     Err(Error::new(ErrorKind::Other, "Missing content : TODO change trait to return an option in result"))
   }
-  fn put_errr_tunnel(&mut self, k : &[u8], v : Vec<MultipleErrorInfo>) -> Result<()> {
+  fn put_errr_tunnel(&mut self, k : Vec<u8>, v : Vec<MultipleErrorInfo>) -> Result<()> {
     // TODO remove if one...
     self.7.push(CachedInfoEI{
       cached_key : Some(v),
-      prev_peer : k.to_vec(),
+      prev_peer : k,
     });
     Ok(())
   }
  
-  fn get_errr_tunnel(&mut self, k : &[u8]) -> Result<&[MultipleErrorInfo]> {
+  fn get_errr_tunnel(&mut self, k : &Vec<u8>) -> Result<&Vec<MultipleErrorInfo>> {
     for i in self.8 .. self.7.len() {
-      if self.7[i].prev_peer == k {
+      if self.7[i].prev_peer == *k {
         self.8 = i;
         return Ok(self.7[i].cached_key.as_mut().unwrap())
       }
     };
     for i in 0 .. self.8 {
-      if self.7[i].prev_peer == k {
+      if self.7[i].prev_peer == *k {
         self.8 = i;
         return Ok(self.7[i].cached_key.as_mut().unwrap())
       }
@@ -188,24 +188,24 @@ impl<P : Peer> CacheIdProducer for CachedInfoManager<P> {
 impl<P : Peer> TunnelCache<(CachedW,<P as Peer>::Address),CachedR> for CachedInfoManager<P> {
 
 //  fn put_symw_tunnel(&mut self, k, &[u8], RcRefCell<<CachedW>>) -> Result<()>;
-  fn put_symw_tunnel(&mut self, k : &[u8], ssw : (CachedW,<P as Peer>::Address)) -> Result<()> {
+  fn put_symw_tunnel(&mut self, k : Vec<u8>, ssw : (CachedW,<P as Peer>::Address)) -> Result<()> {
     // TODO remove if one...
     self.0.push(CachedInfo{
       cached_key : Some(ssw),
-      prev_peer : k.to_vec(),
+      prev_peer : k,
     });
     Ok(())
   }
 
-  fn get_symw_tunnel(&mut self, k : &[u8]) -> Result<&mut (CachedW,<P as Peer>::Address)> {
+  fn get_symw_tunnel(&mut self, k : &Vec<u8>) -> Result<&mut (CachedW,<P as Peer>::Address)> {
     for i in self.1 .. self.0.len() {
-      if self.0[i].prev_peer == k {
+      if self.0[i].prev_peer == *k {
         self.1 = i;
         return Ok(self.0[i].cached_key.as_mut().unwrap())
       }
     };
     for i in 0 .. self.1 {
-      if self.0[i].prev_peer == k {
+      if self.0[i].prev_peer == *k {
         self.1 = i;
         return Ok(self.0[i].cached_key.as_mut().unwrap())
       }
@@ -213,7 +213,7 @@ impl<P : Peer> TunnelCache<(CachedW,<P as Peer>::Address),CachedR> for CachedInf
     Err(Error::new(ErrorKind::Other, "Missing content : TODO change trait to return an option in result"))
   }
 
-  fn has_symw_tunnel(&mut self, k : &[u8]) -> bool {
+  fn has_symw_tunnel(&mut self, k : &Vec<u8>) -> bool {
     self.get_symw_tunnel(k).is_ok()
   }
 
@@ -225,15 +225,15 @@ impl<P : Peer> TunnelCache<(CachedW,<P as Peer>::Address),CachedR> for CachedInf
     });
     Ok(k)
   }
-  fn get_symr_tunnel(&mut self, k : &[u8]) -> Result<&mut CachedR> {
+  fn get_symr_tunnel(&mut self, k : &Vec<u8>) -> Result<&mut CachedR> {
     for i in self.4 .. self.3.len() {
-      if self.3[i].prev_peer == k {
+      if self.3[i].prev_peer == *k {
         self.4 = i;
         return Ok(self.3[i].cached_key.as_mut().unwrap())
       }
     };
     for i in 0 .. self.4 {
-      if self.3[i].prev_peer == k {
+      if self.3[i].prev_peer == *k {
         self.4 = i;
         return Ok(self.3[i].cached_key.as_mut().unwrap())
       }

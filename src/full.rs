@@ -309,12 +309,12 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
   fn init_dest(&mut self, tr : &mut Self::TR) -> Result<()> {
     if tr.next_proxy_peer == None && tr.current_cache_id.is_some() {
       if let TunnelState::ReplyCached = tr.state {
-        tr.next_proxy_peer = self.cache.get_symw_tunnel(&tr.current_cache_id.as_ref().unwrap()[..]).map(|v|v.1.clone()).ok();
+        tr.next_proxy_peer = self.cache.get_symw_tunnel(tr.current_cache_id.as_ref().unwrap()).map(|v|v.1.clone()).ok();
         tr.read_cache = true;
       } else {
 
       if let TunnelState::QErrorCached = tr.state {
-        tr.next_proxy_peer = self.cache.get_errw_tunnel(&tr.current_cache_id.as_ref().unwrap()[..]).map(|v|v.1.clone()).ok();
+        tr.next_proxy_peer = self.cache.get_errw_tunnel(tr.current_cache_id.as_ref().unwrap()).map(|v|v.1.clone()).ok();
         tr.read_cache = true;
       }
       }
@@ -336,7 +336,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
     if let MultipleErrorMode::CachedRoute = self.error_mode {
       ccid.as_ref().map_or(Ok(()), |id| {
           let r = clone_error_info(&mut shads.0);
-          self.put_errr(&id[..],r) // TODO change trait
+          self.put_errr(id.clone(),r) // TODO change trait
       }).unwrap()
     }
     (FullW {
@@ -359,7 +359,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
     if let MultipleErrorMode::CachedRoute = self.error_mode {
       ccid.as_ref().map_or(Ok(()), |id| {
           let r = clone_error_info(&mut shads.0);
-          self.put_errr(&id[..],r) // TODO change trait
+          self.put_errr(id.clone(),r) // TODO change trait
       }).unwrap()
     }
     FullW {
@@ -383,7 +383,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
 
         if or.current_error_info.as_ref().map(|ei|ei.do_cache()).unwrap_or(false) {
           let (ew,f)= self.new_error_writer(&mut or)?;
-          self.put_errw(&cache_key[..],ew,f)?;
+          self.put_errw(cache_key.clone(),ew,f)?;
         }
         let osk = or.current_cache_id.clone();
 //        or.current_cache_id = None; // bad idea (eg error on error from read accessed from proxy)
@@ -391,7 +391,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
 
        
         let ssw = self.new_sym_writer(key,fsk);
-        self.put_symw(&cache_key[..],ssw, or.from.clone())?;
+        self.put_symw(cache_key.clone(),ssw, or.from.clone())?;
         (ProxyFullKind::QueryCached(cache_key, self.limiter_proto_w.clone()), or.next_proxy_peer.clone().unwrap())
       },
       TunnelState::ReplyCached => {
@@ -473,7 +473,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
       },
       TunnelState::ReplyCached => {
         // TODO this unwrap can break : remove
-        let cr = self.get_symr(&or.current_cache_id.as_ref().unwrap()[..])?;
+        let cr = self.get_symr(or.current_cache_id.as_ref().unwrap())?;
         let cl = or.content_limiter.clone();
         Ok(DestFull {
           origin_read : or,
@@ -626,7 +626,7 @@ impl<TT : GenTunnelTraits> TunnelError for Full<TT> {
       TunnelState::QErrorCached => {
         let errcode = tr.error_code.clone().unwrap();
         // TODO this unwrap can break : remove
-        let (error_cached, dest) = self.get_errw(&tr.current_cache_id.as_ref().unwrap()[..])?;
+        let (error_cached, dest) = self.get_errw(tr.current_cache_id.as_ref().unwrap())?;
 
         let ErrorWriter::CachedRoute { code,  dest_cache_id} = error_cached; 
         Ok((ErrorWriter::CachedRoute{code : xor_err_code(errcode, code), dest_cache_id : dest_cache_id.clone()}, dest.clone()))
@@ -647,7 +647,7 @@ impl<TT : GenTunnelTraits> TunnelError for Full<TT> {
       TunnelState::QErrorCached => {
         let errcode = tr.error_code.clone().unwrap();
         // TODO this unwrap can break : remove
-        let error_cached = self.get_errr(&tr.current_cache_id.as_ref().unwrap()[..])?;
+        let error_cached = self.get_errr(tr.current_cache_id.as_ref().unwrap())?;
 
         Ok(identify_cached_errcode(errcode, error_cached)?)
 
@@ -692,11 +692,11 @@ impl<TT : GenTunnelTraits> TunnelManager for Full<TT> {
   // Shadow Sym (if established con)
   type SSCR = TunnelCachedReaderExtClone<TT::SSR>;
 
-  fn put_symw(&mut self, k : &[u8], w : Self::SSCW, dest : <Self::P as Peer>::Address) -> Result<()> {
+  fn put_symw(&mut self, k : Vec<u8>, w : Self::SSCW, dest : <Self::P as Peer>::Address) -> Result<()> {
     self.cache.put_symw_tunnel(k,(w,dest))
   }
 
-  fn get_symw(&mut self, k : &[u8]) -> Result<(Self::SSCW,<Self::P as Peer>::Address)> {
+  fn get_symw(&mut self, k : &Vec<u8>) -> Result<(Self::SSCW,<Self::P as Peer>::Address)> {
     let r = try!(self.cache.get_symw_tunnel(k));
     Ok(r.clone())
   }
@@ -704,7 +704,7 @@ impl<TT : GenTunnelTraits> TunnelManager for Full<TT> {
     self.cache.put_symr_tunnel(w)
   }
 
-  fn get_symr(&mut self, k : &[u8]) -> Result<Self::SSCR> {
+  fn get_symr(&mut self, k : &Vec<u8>) -> Result<Self::SSCR> {
     let r = self.cache.get_symr_tunnel(k)?;
     Ok(r.clone())
   }
@@ -724,19 +724,19 @@ impl<TT : GenTunnelTraits> TunnelManager for Full<TT> {
 }
 
 impl<TT : GenTunnelTraits> TunnelManagerError for Full<TT> {
-  fn put_errw(&mut self, k : &[u8], w : Self::EW, dest : <Self::P as Peer>::Address) -> Result<()> {
+  fn put_errw(&mut self, k : Vec<u8>, w : Self::EW, dest : <Self::P as Peer>::Address) -> Result<()> {
     self.cache.put_errw_tunnel(k,(w,dest))
   }
 
-  fn get_errw(&mut self, k : &[u8]) -> Result<(Self::EW,<Self::P as Peer>::Address)> {
+  fn get_errw(&mut self, k : &Vec<u8>) -> Result<(Self::EW,<Self::P as Peer>::Address)> {
     let r = self.cache.get_errw_tunnel(k)?;
     Ok(r.clone())
   }
-  fn put_errr(&mut self, k : &[u8], infos_read : Vec<Self::EI>) -> Result<()> {
+  fn put_errr(&mut self, k : Vec<u8>, infos_read : Vec<Self::EI>) -> Result<()> {
     self.cache.put_errr_tunnel(k,infos_read)
   }
 
-  fn get_errr(&mut self, k : &[u8]) -> Result<&[Self::EI]> {
+  fn get_errr(&mut self, k : &Vec<u8>) -> Result<&[Self::EI]> {
     let r = self.cache.get_errr_tunnel(k)?;
     Ok(&r[..])
   }

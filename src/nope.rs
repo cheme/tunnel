@@ -151,20 +151,20 @@ impl CacheIdProducer for Nope {
 }
 
 impl<EW,EI> TunnelCacheErr<EW,EI> for Nope {
-  fn put_errw_tunnel(&mut self, _ : &[u8], _ : EW) -> Result<()> {
+  fn put_errw_tunnel(&mut self, _ : Vec<u8>, _ : EW) -> Result<()> {
     // TODO replace with actual erro
     unimplemented!()
   }
-  fn get_errw_tunnel(&mut self, _ : &[u8]) -> Result<&mut EW> {
+  fn get_errw_tunnel(&mut self, _ : &Vec<u8>) -> Result<&mut EW> {
     // TODO replace with actual erro
     unimplemented!()
   }
-  fn put_errr_tunnel(&mut self, _ : &[u8], _ : Vec<EI>) -> Result<()> {
+  fn put_errr_tunnel(&mut self, _ : Vec<u8>, _ : Vec<EI>) -> Result<()> {
    // TODO replace with actual erro
     unimplemented!()
   }
   
-  fn get_errr_tunnel(&mut self, _ : &[u8]) -> Result<&[EI]> {
+  fn get_errr_tunnel(&mut self, _ : &Vec<u8>) -> Result<&Vec<EI>> {
    // TODO replace with actual erro
     unimplemented!()
   }
@@ -172,16 +172,16 @@ impl<EW,EI> TunnelCacheErr<EW,EI> for Nope {
  
 }
 impl<SSW,SSR> TunnelCache<SSW,SSR> for Nope {
-  fn put_symw_tunnel(&mut self, _ : &[u8], _ : SSW) -> Result<()> {
+  fn put_symw_tunnel(&mut self, _ : Vec<u8>, _ : SSW) -> Result<()> {
     // TODO replace with actual erro
     unimplemented!()
   }
-  fn get_symw_tunnel(&mut self, _ : &[u8]) -> Result<&mut SSW> {
+  fn get_symw_tunnel(&mut self, _ : &Vec<u8>) -> Result<&mut SSW> {
     // TODO replace with actual erro
     unimplemented!()
   }
 
-  fn has_symw_tunnel(&mut self, _ : &[u8]) -> bool {
+  fn has_symw_tunnel(&mut self, _ : &Vec<u8>) -> bool {
     false
   }
 
@@ -189,11 +189,11 @@ impl<SSW,SSR> TunnelCache<SSW,SSR> for Nope {
     // TODO replace with actual erro
     unimplemented!()
   }
-  fn get_symr_tunnel(&mut self, _ : &[u8]) -> Result<&mut SSR> {
+  fn get_symr_tunnel(&mut self, _ : &Vec<u8>) -> Result<&mut SSR> {
     // TODO replace with actual erro
     unimplemented!()
   }
-  fn has_symr_tunnel(&mut self, _ : &[u8]) -> bool {
+  fn has_symr_tunnel(&mut self, _ : &Vec<u8>) -> bool {
     false
   }
 }

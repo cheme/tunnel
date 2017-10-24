@@ -186,13 +186,13 @@ Self::TR : TunnelReader<RI=Self::RI>
   // Shadow Sym (if established con) aka destread
   type SSCR : ExtRead;
 
-  fn put_symw(&mut self, &[u8], Self::SSCW, <Self::P as Peer>::Address) -> Result<()>;
+  fn put_symw(&mut self, Vec<u8>, Self::SSCW, <Self::P as Peer>::Address) -> Result<()>;
 
-  fn get_symw(&mut self, &[u8]) -> Result<(Self::SSCW,<Self::P as Peer>::Address)>;
+  fn get_symw(&mut self, &Vec<u8>) -> Result<(Self::SSCW,<Self::P as Peer>::Address)>;
 
   fn put_symr(&mut self, Self::SSCR) -> Result<Vec<u8>>;
 
-  fn get_symr(&mut self, &[u8]) -> Result<Self::SSCR>;
+  fn get_symr(&mut self, &Vec<u8>) -> Result<Self::SSCR>;
 
 
   fn use_sym_exchange (&Self::RI) -> bool;
@@ -209,13 +209,13 @@ pub trait TunnelManagerError : TunnelError + CacheIdProducer where  Self::EI : I
 Self::TR : TunnelReaderError<EI = Self::EI>
 {
 
-  fn put_errw(&mut self, &[u8], Self::EW, <Self::P as Peer>::Address) -> Result<()>;
+  fn put_errw(&mut self, Vec<u8>, Self::EW, <Self::P as Peer>::Address) -> Result<()>;
 
-  fn get_errw(&mut self, &[u8]) -> Result<(Self::EW,<Self::P as Peer>::Address)>;
+  fn get_errw(&mut self, &Vec<u8>) -> Result<(Self::EW,<Self::P as Peer>::Address)>;
 
-  fn put_errr(&mut self, &[u8], Vec<Self::EI>) -> Result<()>;
+  fn put_errr(&mut self, Vec<u8>, Vec<Self::EI>) -> Result<()>;
 
-  fn get_errr(&mut self, &[u8]) -> Result<&[Self::EI]>;
+  fn get_errr(&mut self, &Vec<u8>) -> Result<&[Self::EI]>;
 
 }
  
@@ -327,29 +327,29 @@ impl From<BorrErr> for IoError {
 /// key
 /// IOresult is used but only for the sake of lazyness (TODO)
 pub trait TunnelCache<SSW,SSR> {
-  fn put_symw_tunnel(&mut self, &[u8], SSW) -> Result<()>;
-  fn get_symw_tunnel(&mut self, &[u8]) -> Result<&mut SSW>;
-  fn has_symw_tunnel(&mut self, k : &[u8]) -> bool {
+  fn put_symw_tunnel(&mut self, Vec<u8>, SSW) -> Result<()>;
+  fn get_symw_tunnel(&mut self, &Vec<u8>) -> Result<&mut SSW>;
+  fn has_symw_tunnel(&mut self, k : &Vec<u8>) -> bool {
     self.get_symw_tunnel(k).is_ok()
   }
 
   fn put_symr_tunnel(&mut self, SSR) -> Result<Vec<u8>>;
-  fn get_symr_tunnel(&mut self, &[u8]) -> Result<&mut SSR>;
-  fn has_symr_tunnel(&mut self, k : &[u8]) -> bool {
+  fn get_symr_tunnel(&mut self, &Vec<u8>) -> Result<&mut SSR>;
+  fn has_symr_tunnel(&mut self, k : &Vec<u8>) -> bool {
     self.get_symr_tunnel(k).is_ok()
   }
 }
 pub struct TunnelCacheC<C1,C2>(C1,C2);
 pub trait TunnelCacheErr<EW,EI> {
-  fn put_errw_tunnel(&mut self, &[u8], EW) -> Result<()>;
-  fn get_errw_tunnel(&mut self, &[u8]) -> Result<&mut EW>;
-  fn has_errw_tunnel(&mut self, k : &[u8]) -> bool {
+  fn put_errw_tunnel(&mut self, Vec<u8>, EW) -> Result<()>;
+  fn get_errw_tunnel(&mut self, &Vec<u8>) -> Result<&mut EW>;
+  fn has_errw_tunnel(&mut self, k : &Vec<u8>) -> bool {
     self.get_errw_tunnel(k).is_ok()
   }
 
-  fn put_errr_tunnel(&mut self, &[u8], Vec<EI>) -> Result<()>;
-  fn get_errr_tunnel(&mut self, &[u8]) -> Result<&[EI]>;
-  fn has_errr_tunnel(&mut self, k : &[u8]) -> bool {
+  fn put_errr_tunnel(&mut self, Vec<u8>, Vec<EI>) -> Result<()>;
+  fn get_errr_tunnel(&mut self, &Vec<u8>) -> Result<&Vec<EI>>;
+  fn has_errr_tunnel(&mut self, k : &Vec<u8>) -> bool {
     self.get_errr_tunnel(k).is_ok()
   }
 }
