@@ -505,6 +505,16 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
 }
 impl<TT : GenTunnelTraits> TunnelReadProv for FullReadProv<TT> {
   type T = Full<TT>;
+
+  fn new_tunnel_read_prov (&self) -> Self {
+    FullReadProv {
+      me : self.me.clone(),
+      limiter_proto_r : self.limiter_proto_r.clone(),
+      sym_prov : self.sym_prov.clone(),
+      _p : PhantomData,
+    }
+  }
+
   fn new_reader (&mut self) -> <Self::T as TunnelNoRep>::TR {
     let s = self.me.new_shadr();
     FullR {

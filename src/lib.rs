@@ -156,6 +156,7 @@ pub trait TunnelNoRep : Sized {
 /// Can be use directly with a read stream without accessing a central tunnel impl.
 pub trait TunnelReadProv {
   type T : TunnelNoRep;
+  fn new_tunnel_read_prov (&self) -> Self;
   fn new_reader (&mut self) -> <Self::T as TunnelNoRep>::TR;
   /// same as tunnel dest reader but not mandatory (for instance we do not want to share cache
   /// informations)
