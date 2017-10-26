@@ -29,6 +29,7 @@ use bincode::{
 use super::{
   Peer,
   TunnelReader,
+  TunnelReadProv,
   TunnelReaderError,
   TunnelReaderNoRep,
   TunnelWriterExt,
@@ -91,7 +92,7 @@ pub trait GenTunnelTraits {
   /// Reply writer use only to include a reply envelope
   type RW : TunnelWriterExt;
   type REP : ReplyProvider<Self::P, MultipleReplyInfo<<Self::P as Peer>::Address>>;
-  type SP : SymProvider<Self::SSW,Self::SSR>;
+  type SP : SymProvider<Self::SSW,Self::SSR> + Clone;
   type TNR : TunnelNoRep<P=Self::P,W=Self::RW>;
   type EP : ErrorProvider<Self::P, MultipleErrorInfo>;
 }
@@ -118,6 +119,13 @@ pub struct Full<TT : GenTunnelTraits> {
   pub reply_once_buf_size : usize,
   pub _p : PhantomData<TT>,
 }
+pub struct FullReadProv<TT : GenTunnelTraits> {
+  pub me : TT::P,
+  pub limiter_proto_r : TT::LR,
+  pub sym_prov : TT::SP,
+  pub _p : PhantomData<TT>,
+}
+
 
 type Shadows<P,RI,EI,LW,TW> = CompExtW<MultiWExt<TunnelShadowW<P,RI,EI,LW,TW>>,LW>;
 //type Shadows<P : Peer, RI : Info, EI : Info,LW : ExtWrite,TW : TunnelWriterExt> = CompExtW<MultiWExt<TunnelShadowW<P,RI,EI,LW,TW>>,LW>;
@@ -274,6 +282,7 @@ pub fn clone_shadows_keys<P : Peer, RI : RepInfo, EI : Info,LW : ExtWrite,TW : T
       res
 }
 impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
+  type ReadProv = FullReadProv<TT>;
   type P = TT::P;
   type W = FullW<MultipleReplyInfo<<TT::P as Peer>::Address>, MultipleErrorInfo, TT::P, TT::LW,TT::RW>;
   type TR = FullR<MultipleReplyInfo<<TT::P as Peer>::Address>, MultipleErrorInfo, TT::P, TT::LR>;
@@ -484,7 +493,98 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
       },
     }
   }
+
+  fn new_tunnel_read_prov (&self) -> Self::ReadProv {
+    FullReadProv {
+      me : self.me.clone(),
+      limiter_proto_r : self.limiter_proto_r.clone(),
+      sym_prov : self.sym_prov.clone(),
+      _p : PhantomData,
+    }
+  }
 }
+impl<TT : GenTunnelTraits> TunnelReadProv for FullReadProv<TT> {
+  type T = Full<TT>;
+  fn new_reader (&mut self) -> <Self::T as TunnelNoRep>::TR {
+    let s = self.me.new_shadr();
+    FullR {
+      error_code : None,
+      state: TunnelState::TunnelState,
+      current_cache_id: None,
+      current_reply_info: None,
+      current_error_info: None,
+      next_proxy_peer : None,
+      tunnel_id : None, // TODO useless remove??
+      shad : CompExtR(s,self.limiter_proto_r.clone()),
+      content_limiter : self.limiter_proto_r.clone(),
+      need_content_limiter : false,
+      read_cache : false,
+    }
+  }
+
+  fn new_dest_reader<R : Read> (&mut self, mut or : <Self::T as TunnelNoRep>::TR, r : &mut R) -> Result<Option<<Self::T as TunnelNoRep>::DR>> {
+    Ok(match or.state {
+      TunnelState::TunnelState => {
+        None
+      },
+      TunnelState::QueryOnce => {
+        Some(DestFull {
+          origin_read : or,
+          kind : DestFullKind::Id,
+        })
+      },
+      TunnelState::QueryCached => {
+        // same as query once because no bidirect cache yet (only replycache route use cache and we
+        // do not resend) and previous cache id in origin read
+        Some(DestFull {
+          origin_read : or,
+          kind : DestFullKind::Id,
+        })
+      },
+      TunnelState::ReplyOnce => {
+
+        // TODO this is awkward : move key reading into or method to avoid those lifetime related
+        // copies TODO duplicate code move in function
+        let mut current_error_info = or.current_error_info;
+        or.current_error_info = None;
+        let mut current_reply_info = or.current_reply_info;
+        or.current_reply_info = None;
+        let mut ks : Vec<Vec<u8>>;
+        { 
+          let mut inr = CompExtRInner(r, &mut or);
+          let len : usize = bin_decode(&mut inr, Infinite).map_err(|e|BincErr(e))?;
+          ks = Vec::with_capacity(len);
+          for _ in 0..len {
+            current_error_info.as_mut().unwrap().read_read_info(&mut inr)?;// should always be init.
+            current_reply_info.as_mut().unwrap().read_read_info(&mut inr)?;// should always be init.
+            // TODO replace unwrap by return 
+            let k : &Vec<u8> = current_reply_info.as_ref().ok_or(IoError::new(IoErrorKind::Other, "unparsed reply info"))?
+              .get_reply_key().as_ref().ok_or(IoError::new(IoErrorKind::Other, "no reply key for reply info : wrong reply info"))?;
+            ks.push (k.clone());
+          }
+        }
+        let cr = new_dest_cached_reader_ext(ks.into_iter().map(|k|self.sym_prov.new_sym_reader(k)).collect(), self.limiter_proto_r.clone());
+
+        or.current_reply_info = current_reply_info;
+        or.current_error_info = current_error_info;
+        or.read_end(r)?;
+        Some(DestFull {
+          origin_read : or,
+          kind : DestFullKind::Multi(cr),
+        })
+      },
+      TunnelState::ReplyCached => {
+        None
+      },
+      TunnelState::QErrorCached => {
+        None
+      },
+    })
+  }
+}
+
+
+
 
 impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
   // reply info info needed to established conn

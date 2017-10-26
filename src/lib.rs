@@ -123,8 +123,8 @@ pub trait TunnelReaderExt : ExtRead {
 /// Tunnel trait could be in a single tunnel impl, but we use multiple to separate concerns a bit
 /// When a tunnel implement multiple trait it has property of all trait ('new_writer' of a
 /// TunnelNoRep if Tunnel trait is also implemented will write necessary info for reply).
-pub trait TunnelNoRep {
-//  type ReadProv : TunnelReadProv<TR=Self::TR,DR=DR>,
+pub trait TunnelNoRep : Sized {
+  type ReadProv : TunnelReadProv<T=Self>;
   /// Peer with their address and their asym shadow scheme
   type P : Peer;
   /// actual writer (tunnel logic using tunnel writer)
@@ -149,17 +149,19 @@ pub trait TunnelNoRep {
   fn new_proxy_writer (&mut self, Self::TR, &<Self::P as Peer>::Address) -> Result<(Self::PW, <Self::P as Peer>::Address)>;
   fn new_dest_reader<R : Read> (&mut self, Self::TR, &mut R) -> Result<Self::DR>;
 
-  //fn new_tunnel_read_prov (&self) -> Self::ReadProv;
+  fn new_tunnel_read_prov (&self) -> Self::ReadProv;
 }
-/*
+
 /// Subset of TunelReader for reading without reverence to cache or route provider
 /// Can be use directly with a read stream without accessing a central tunnel impl.
 pub trait TunnelReadProv {
-  type TR : TunnelReaderNoRep;
-  type DR : TunnelReaderExt<TR=Self::TR>;
-  fn new_reader (&mut self) -> Self::TR;
-  fn new_dest_reader<R : Read> (&mut self, Self::TR, &mut R) -> Result<Self::DR>;
-}*/
+  type T : TunnelNoRep;
+  fn new_reader (&mut self) -> <Self::T as TunnelNoRep>::TR;
+  /// same as tunnel dest reader but not mandatory (for instance we do not want to share cache
+  /// informations)
+  fn new_dest_reader<R : Read> (&mut self, <Self::T as TunnelNoRep>::TR, &mut R) -> Result<Option<<Self::T as TunnelNoRep>::DR>>;
+}
+
 /// tunnel with reply
 pub trait Tunnel : TunnelNoRep where Self::TR : TunnelReader<RI=Self::RI> {
   // reply info info needed to established conn -> TODO type reply info looks useless : we create reply

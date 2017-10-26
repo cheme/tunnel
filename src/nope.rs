@@ -6,6 +6,7 @@ use readwrite_comp::{
 use super::{
   TunnelWriter,
   TunnelNoRep,
+  TunnelReadProv,
   TunnelWriterExt,
   TunnelReaderExt,
   TunnelCache,
@@ -257,6 +258,7 @@ impl<P : Peer> TunnelNope<P> {
   }
 }
 impl<P : Peer> TunnelNoRep for TunnelNope<P> {
+  type ReadProv = Self;
   type P = P;
   type W = Nope;
   type TR = Nope;
@@ -268,4 +270,12 @@ impl<P : Peer> TunnelNoRep for TunnelNope<P> {
   fn new_writer_with_route (&mut self, _ : &[&Self::P]) -> Self::W {Nope}
   fn new_proxy_writer (&mut self, _ : Self::TR, _ : &<Self::P as Peer>::Address) -> Result<(Self::PW,<Self::P as Peer>::Address)> {panic!("Nope do not implement that")}
   fn new_dest_reader<R : Read> (&mut self, _ : Self::TR, _ : &mut R) -> Result<Self::DR> {Ok(Nope)}
+  fn new_tunnel_read_prov (&self) -> Self::ReadProv {TunnelNope::new()}
 }
+impl<P : Peer> TunnelReadProv for TunnelNope<P> {
+  type T = Self;
+  fn new_reader (&mut self) -> <Self::T as TunnelNoRep>::TR { Nope }
+  fn new_dest_reader<R : Read> (&mut self, _ : <Self::T as TunnelNoRep>::TR, _ : &mut R) -> Result<Option<<Self::T as TunnelNoRep>::DR>> { Ok(Some(Nope)) }
+}
+
+
