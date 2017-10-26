@@ -143,7 +143,6 @@ pub struct FullW<RI : RepInfo, EI : Info, P : Peer, LW : ExtWrite,TW : TunnelWri
  * Similar to old TunnelShadowExt impl.
  */
 pub struct FullR<RI : RepInfo, EI : Info, P : Peer, LR : ExtRead> {
-  from : <P as Peer>::Address, // only usefull for cached route
   state: TunnelState,
   // TODO try moving in proxy or dest read new method (may be the last info written so no need to be here)
   current_cache_id: Option<Vec<u8>>,
@@ -283,12 +282,11 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
   /// Dest reader
   type DR = DestFull<Self::TR,TT::SSR,TT::LR>;
  
-  fn new_reader (&mut self, from : &<Self::P as Peer>::Address) -> Self::TR {
+  fn new_reader (&mut self) -> Self::TR {
 
     let s = self.me.new_shadr();
     FullR {
       error_code : None,
-      from : from.clone(), // only usefull for cached route
       state: TunnelState::TunnelState,
       current_cache_id: None,
       current_reply_info: None,
@@ -367,7 +365,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
     }
   }
 
-  fn new_proxy_writer (&mut self, mut or : Self::TR) -> Result<(Self::PW, <Self::P as Peer>::Address)> {
+  fn new_proxy_writer (&mut self, mut or : Self::TR, from : &<Self::P as Peer>::Address) -> Result<(Self::PW, <Self::P as Peer>::Address)> {
     let (pfk,a) = match or.state {
       TunnelState::ReplyOnce => {
         let key = or.current_reply_info.as_ref().unwrap().get_reply_key().unwrap().clone();
@@ -380,7 +378,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
         let cache_key = self.new_cache_id();
 
         if or.current_error_info.as_ref().map(|ei|ei.do_cache()).unwrap_or(false) {
-          let (ew,f)= self.new_error_writer(&mut or)?;
+          let (ew,f)= self.new_error_writer(&mut or,from)?;
           self.put_errw(cache_key.clone(),ew,f)?;
         }
         let osk = or.current_cache_id.clone();
@@ -389,7 +387,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
 
        
         let ssw = self.new_sym_writer(key,fsk);
-        self.put_symw(cache_key.clone(),ssw, or.from.clone())?;
+        self.put_symw(cache_key.clone(),ssw, from.clone())?;
         (ProxyFullKind::QueryCached(cache_key, self.limiter_proto_w.clone()), or.next_proxy_peer.clone().unwrap())
       },
       TunnelState::ReplyCached => {
@@ -496,7 +494,7 @@ impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
 
 //pub struct FullW<RI : RepInfo, EI : Info, P : Peer, LW : ExtWrite,TW : TunnelWriterExt > {
   
-  fn new_reply_writer<R : Read> (&mut self, tr : &mut Self::DR, r : &mut R) -> Result<(Self::RW, <Self::P as Peer>::Address)> {
+  fn new_reply_writer<R : Read> (&mut self, tr : &mut Self::DR, r : &mut R, from : &<Self::P as Peer>::Address) -> Result<(Self::RW, <Self::P as Peer>::Address)> {
 
     let (inroute, okey) = match *tr.origin_read.current_reply_info.as_ref().unwrap_or_else(
       // TODO return Error instead (when panic removal future refacto)
@@ -552,7 +550,7 @@ impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
           // return writer TODO consider removing current cache id to avoid clone(not use in reply
           // writer init
           let ssw = TunnelCachedWriterExt::new(self.sym_prov.new_sym_writer(k), tr.origin_read.current_cache_id.clone().unwrap(), self.limiter_proto_w.clone());
-          (ReplyWriter::CachedRoute{shad : ssw}, tr.origin_read.from.clone())
+          (ReplyWriter::CachedRoute{shad : ssw}, from.clone())
 
         } else {
           unimplemented!()
@@ -595,7 +593,7 @@ impl<TT : GenTunnelTraits> TunnelError for Full<TT> {
   /// can error on error, cannot reply also, if we need to reply or error on error that is a Reply 
   /// TODO make a specific type for error reply : either cached or replyinfo for full error
   type EW = ErrorWriter;
-  fn new_error_writer (&mut self, tr : &mut Self::TR) -> Result<(Self::EW, <Self::P as Peer>::Address)> {
+  fn new_error_writer (&mut self, tr : &mut Self::TR, from : &<Self::P as Peer>::Address) -> Result<(Self::EW, <Self::P as Peer>::Address)> {
 
     let okey = match *tr.current_error_info.as_ref().unwrap_or_else(
       // TODO return Error instead (when panic removal future refacto)
@@ -612,13 +610,13 @@ impl<TT : GenTunnelTraits> TunnelError for Full<TT> {
         if let Some(k) = okey {
           // return writer TODO consider removing current cache id to avoid clone(not use in reply
           // writer init
-          (ErrorWriter::CachedRoute{code : k.clone(), dest_cache_id : tr.current_cache_id.clone().unwrap()}, tr.from.clone())
+          (ErrorWriter::CachedRoute{code : k.clone(), dest_cache_id : tr.current_cache_id.clone().unwrap()}, from.clone())
 
         } else {
           unimplemented!() // TODO nice error
         })
   }
-  fn proxy_error_writer (&mut self, tr : &mut Self::TR) -> Result<(Self::EW, <Self::P as Peer>::Address)> {
+  fn proxy_error_writer (&mut self, tr : &mut Self::TR, _from : &<Self::P as Peer>::Address) -> Result<(Self::EW, <Self::P as Peer>::Address)> {
     match tr.state {
      
       TunnelState::QErrorCached => {

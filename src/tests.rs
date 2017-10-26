@@ -550,7 +550,7 @@ pub fn tunnel_test<P : Peer> (  tc : TunnelTestConfig<P>)
 
 fn reply_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr : 
                          DestFull<FullR<MultipleReplyInfo<<P as Peer>::Address>,MultipleErrorInfo,P,SizedWindows<TestSizedWindows>>,SRead, SizedWindows<TestSizedWindows>>
-                         , mut input : Cursor<Vec<u8>>, tunnel : &mut Full<TestTunnelTraits<P>>)
+                         , from : &<P as Peer>::Address, mut input : Cursor<Vec<u8>>, tunnel : &mut Full<TestTunnelTraits<P>>)
 {
    let mut ixcache = 127;//half of 8 bit pool
    let reply_mode = tc.reply_mode.clone();
@@ -561,7 +561,7 @@ fn reply_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr :
 
    let mut output : Cursor<Vec<u8>> = Cursor::new(Vec::new());
 
-   let (mut rw, dest) = tunnel.new_reply_writer(&mut dr, &mut input).unwrap();
+   let (mut rw, dest) = tunnel.new_reply_writer(&mut dr, &mut input, from).unwrap();
    let tunnelsrep : Vec<_> = route_rep.iter().map(|p|{
      ixcache += 1;
     new_full_tunnel(&tc, &p, ixcache)
@@ -576,13 +576,13 @@ fn reply_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr :
 }
 fn reply_cached_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr : 
                          DestFull<FullR<MultipleReplyInfo<<P as Peer>::Address>,MultipleErrorInfo,P,SizedWindows<TestSizedWindows>>,SRead, SizedWindows<TestSizedWindows>>
-                         , mut input : Cursor<Vec<u8>>, mut tunnels : Vec<Full<TestTunnelTraits<P>>>)
+                         , from : &<P as Peer>::Address, mut input : Cursor<Vec<u8>>, mut tunnels : Vec<Full<TestTunnelTraits<P>>>)
 {
 
    let mut output : Cursor<Vec<u8>> = Cursor::new(Vec::new());
 
    tunnels.reverse();
-   let (mut rw, dest) = tunnels[0].new_reply_writer(&mut dr, &mut input).unwrap();
+   let (mut rw, dest) = tunnels[0].new_reply_writer(&mut dr, &mut input, from).unwrap();
    assert!(&dest == tunnels[1].me.get_address());
    tunnels[0].reply_writer_init(&mut rw, &mut dr, &mut input, &mut output).unwrap();
 
@@ -668,7 +668,7 @@ fn send_test<P : Peer, W : ExtWrite> (mut tc : TunnelTestConfig<P>, mut tunn_we 
       output = Cursor::new(Vec::new());
       let (mut proxy, dest) =  { 
         let tunnel = &mut tunnels[i];
-        tunn_re = tunnel.new_reader(&from_add);
+        tunn_re = tunnel.new_reader();
         assert!(tunn_re.is_dest() == None);
         tunn_re.read_header(&mut input_v).unwrap();
         if tunn_re.is_dest() == None {
@@ -676,7 +676,7 @@ fn send_test<P : Peer, W : ExtWrite> (mut tc : TunnelTestConfig<P>, mut tunn_we 
         }
         assert!(tunn_re.is_dest() == Some(false));
         assert!(tunn_re.is_err() == Some(false));
-        tunnel.new_proxy_writer(tunn_re).unwrap()
+        tunnel.new_proxy_writer(tunn_re,&from_add).unwrap()
       };
       assert!(dest == to_add);
       proxy.read_header(&mut input_v).unwrap();
@@ -702,7 +702,7 @@ fn send_test<P : Peer, W : ExtWrite> (mut tc : TunnelTestConfig<P>, mut tunn_we 
         let nbpeer = error_position + 1;
         let mut tunn_err = &mut tunnels[0..error_position + 1];
         tunn_err.reverse();
-        let (te, dest) = tunn_err[0].new_error_writer(&mut proxy.get_reader()).unwrap();
+        let (te, dest) = tunn_err[0].new_error_writer(&mut proxy.get_reader(),&from_add).unwrap();
         assert!(&dest == tunn_err[1].me.get_address());
         send_error (nbpeer, te, &mut tunn_err);
         return;
@@ -717,9 +717,8 @@ fn send_test<P : Peer, W : ExtWrite> (mut tc : TunnelTestConfig<P>, mut tunn_we 
     let mut dest_reader;
     let mut input_v;
     {
-      let from_add = tunnels[nbpeer - 2].me.get_address().clone();
       let tunnel = &mut tunnels[nbpeer - 1];
-      tunn_re = tunnel.new_reader(&from_add);
+      tunn_re = tunnel.new_reader();
       input_v = Cursor::new(output.into_inner());
       tunn_re.read_header(&mut input_v).unwrap();
       if tunn_re.is_dest() == None {
@@ -766,6 +765,7 @@ fn send_test<P : Peer, W : ExtWrite> (mut tc : TunnelTestConfig<P>, mut tunn_we 
           ix += l;
         }
       }
+      let from_add = tunnels[nbpeer - 2].me.get_address().clone();
       match test_mode {
         TestMode::NoReply | TestMode::Reply(0) => {
           dest_reader.read_to_end(&mut input_v,&mut readbuf).unwrap();
@@ -775,10 +775,10 @@ fn send_test<P : Peer, W : ExtWrite> (mut tc : TunnelTestConfig<P>, mut tunn_we 
         TestMode::Reply(nbr) => {
           tc.test_mode = TestMode::Reply(nbr - 1);
           match reply_mode {
-            MultipleReplyMode::Route => reply_test(tc, dest_reader, input_v, &mut tunnels[nbpeer - 1]),
-            MultipleReplyMode::OtherRoute => reply_test(tc, dest_reader, input_v, &mut tunnels[nbpeer - 1]),
+            MultipleReplyMode::Route => reply_test(tc, dest_reader,&from_add, input_v, &mut tunnels[nbpeer - 1]),
+            MultipleReplyMode::OtherRoute => reply_test(tc, dest_reader,&from_add, input_v, &mut tunnels[nbpeer - 1]),
             MultipleReplyMode::NoHandling => (),
-            MultipleReplyMode::CachedRoute => reply_cached_test(tc, dest_reader, input_v, tunnels),
+            MultipleReplyMode::CachedRoute => reply_cached_test(tc, dest_reader,&from_add, input_v, tunnels),
             _ => panic!("Test case not covered"),
           }
         },
@@ -801,7 +801,7 @@ fn send_error<P : Peer, EW : TunnelErrorWriter> (nbpeer : usize, mut tunn_e : EW
       let from_add = tunnels[i - 1].me.get_address().clone();
       let to_add = tunnels[i + 1].me.get_address().clone();
       let tunnel = &mut tunnels[i];
-      tunn_re = tunnel.new_reader(&from_add);
+      tunn_re = tunnel.new_reader();
       assert!(tunn_re.is_dest() == None);
       assert!(tunn_re.is_err() == None);
       input_v = Cursor::new(output.into_inner());
@@ -812,16 +812,16 @@ fn send_error<P : Peer, EW : TunnelErrorWriter> (nbpeer : usize, mut tunn_e : EW
       }
       assert!(tunn_re.is_dest() == Some(false));
       assert!(tunn_re.is_err() == Some(true));
-      let (mut proxy, dest) = tunnel.proxy_error_writer(&mut tunn_re).unwrap();
+      let (mut proxy, dest) = tunnel.proxy_error_writer(&mut tunn_re,&from_add).unwrap();
       assert!(dest == to_add);
       proxy.write_error(&mut output).unwrap();
       nbp += 1;
     }
 
     assert!(nbtoprox == nbp);
-      let from_add = tunnels[nbpeer - 2].me.get_address().clone();
+//      let from_add = tunnels[nbpeer - 2].me.get_address().clone();
       let tunnel = &mut tunnels[nbpeer - 1];
-      tunn_re = tunnel.new_reader(&from_add);
+      tunn_re = tunnel.new_reader();
       input_v = Cursor::new(output.into_inner());
       tunn_re.read_header(&mut input_v).unwrap();
       if tunn_re.is_dest() == None {
