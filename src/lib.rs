@@ -170,8 +170,14 @@ pub trait Tunnel : TunnelNoRep where Self::TR : TunnelReader<RI=Self::RI> {
   type RI : Info; // RI and EI in TunnelError seems useless in this trait except pfor tunnelreader
   type RW : TunnelWriterExt;
   /// TODO return dest inner to RW same for proxy, error and erro proxy
-  fn new_reply_writer<R : Read> (&mut self, &mut Self::DR, &mut R, _from : &<Self::P as Peer>::Address) -> Result<(Self::RW, <Self::P as Peer>::Address)>;
-  // TODO move in reply writer for shorter need of tunnel ?
+  /// Reply is optionnaly returned to allow conditional implementation (Tunnel impl allowing reply
+  /// but not in all cases).
+  /// Boolean indicates if call to reply_writer_init is needed (otherwhise replying is possible
+  /// without having both read and write in the same thread).
+  fn new_reply_writer<R : Read> (&mut self, &mut Self::DR, &mut R, _from : &<Self::P as Peer>::Address) -> Result<Option<(Self::RW, <Self::P as Peer>::Address,bool)>>;
+
+  /// for some reply we use both R and W to avoid big memory buffer when replying (for instance
+  /// with included reply route (containing headers))
   fn reply_writer_init<R : Read, W : Write> (&mut self, &mut Self::RW, &mut Self::DR, &mut R, &mut W) -> Result<()>;
 }
 

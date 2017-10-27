@@ -604,15 +604,14 @@ impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
 
 //pub struct FullW<RI : RepInfo, EI : Info, P : Peer, LW : ExtWrite,TW : TunnelWriterExt > {
   
-  fn new_reply_writer<R : Read> (&mut self, tr : &mut Self::DR, r : &mut R, from : &<Self::P as Peer>::Address) -> Result<(Self::RW, <Self::P as Peer>::Address)> {
+  fn new_reply_writer<R : Read> (&mut self, tr : &mut Self::DR, r : &mut R, from : &<Self::P as Peer>::Address) -> Result<Option<(Self::RW, <Self::P as Peer>::Address, bool)>> {
 
     let (inroute, okey) = match *tr.origin_read.current_reply_info.as_ref().unwrap_or_else(
       // TODO return Error instead (when panic removal future refacto)
       || unimplemented!()
     ) {
       MultipleReplyInfo::NoHandling => {
-        // TODO return a err (no panic!!)
-        unimplemented!()
+        return Ok(None);
       },
       MultipleReplyInfo::Route => {
         (true,None)
@@ -621,52 +620,53 @@ impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
       _ => unimplemented!(),
     };
 
-     Ok( if inroute {
+     Ok(Some( if inroute {
 
-        let mut buf = vec![0;self.reply_once_buf_size];
-        let mut l;
-        // read_end of content
-        while {
-          l = tr.read_from(r, &mut buf[..])?;
-          l != 0
-        } {}
-        tr.origin_read.switch_toreppayload(r)?;
-        let rep;
-        let a;
-        {
+       let mut buf = vec![0;self.reply_once_buf_size];
+       let mut l;
+       // read_end of content
+       while {
+         l = tr.read_from(r, &mut buf[..])?;
+         l != 0
+       } {}
+       tr.origin_read.switch_toreppayload(r)?;
+       let rep;
+       let a;
+       let need_init;
+       {
 //      let mut buf3 = vec![0;1024];   let a3 = tr.read_from(r, &mut buf3[..]).unwrap(); panic!("b : {:?}", &buf3[..a3]); // some 72 wrong or from shad simply
 
-      // TODO see if method facto with proxy
-      let mut inr = CompExtRInner(r, tr);
+          // TODO see if method facto with proxy
+          let mut inr = CompExtRInner(r, tr);
 
-        // TODO read from after header!!!!!!!!!!!!!^####### 
-        let mut ritmp : MultipleReplyInfo<<TT::P as Peer>::Address> = MultipleReplyInfo::RouteReply(Vec::new());
-        ritmp.read_read_info(&mut inr)?;
-        // read add
-        a = bin_decode(&mut inr, Infinite).map_err(|e|BincErr(e))?;
-        rep = if let MultipleReplyInfo::RouteReply(v) = ritmp {
-          // return writer
-          let ssw = CompExtW(self.sym_prov.new_sym_writer(v),self.limiter_proto_w.clone());
-          ReplyWriter::Route{shad : ssw}
-        } else {
-          panic!("missing key for encoding reply"); // TODO transform to error
-        };
-        }
+          let mut ritmp : MultipleReplyInfo<<TT::P as Peer>::Address> = MultipleReplyInfo::RouteReply(Vec::new());
+          ritmp.read_read_info(&mut inr)?;
+          // read add
+          a = bin_decode(&mut inr, Infinite).map_err(|e|BincErr(e))?;
+          rep = if let MultipleReplyInfo::RouteReply(v) = ritmp {
+            // return writer
+            let ssw = CompExtW(self.sym_prov.new_sym_writer(v),self.limiter_proto_w.clone());
+            need_init = true;
+            ReplyWriter::Route{shad : ssw}
+          } else {
+            panic!("missing key for encoding reply"); // TODO transform to error
+          };
+       }
+       (rep,a,need_init)
 
 
-        (rep,a)
       } else {
         if let Some(k) = okey {
           // return writer TODO consider removing current cache id to avoid clone(not use in reply
           // writer init
           let ssw = TunnelCachedWriterExt::new(self.sym_prov.new_sym_writer(k), tr.origin_read.current_cache_id.clone().unwrap(), self.limiter_proto_w.clone());
-          (ReplyWriter::CachedRoute{shad : ssw}, from.clone())
+          (ReplyWriter::CachedRoute{shad : ssw}, from.clone(),false)
 
         } else {
           unimplemented!()
          // panic!("missing key for encoding reply"); // TODO transform to error
         }
-      })
+      }))
  
   }
   // TODO consider using plain tr and read_end it (as was done before for new_reply_writer)

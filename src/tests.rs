@@ -561,12 +561,13 @@ fn reply_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr :
 
    let mut output : Cursor<Vec<u8>> = Cursor::new(Vec::new());
 
-   let (mut rw, dest) = tunnel.new_reply_writer(&mut dr, &mut input, from).unwrap();
+   let (mut rw, dest, need_init) = tunnel.new_reply_writer(&mut dr, &mut input, from).unwrap().unwrap();
    let tunnelsrep : Vec<_> = route_rep.iter().map(|p|{
      ixcache += 1;
     new_full_tunnel(&tc, &p, ixcache)
    }).collect();
    assert!(&dest == tunnelsrep[1].me.get_address());
+   assert!(need_init == true);
    tunnel.reply_writer_init(&mut rw, &mut dr, &mut input, &mut output).unwrap();
 
 
@@ -582,9 +583,13 @@ fn reply_cached_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr :
    let mut output : Cursor<Vec<u8>> = Cursor::new(Vec::new());
 
    tunnels.reverse();
-   let (mut rw, dest) = tunnels[0].new_reply_writer(&mut dr, &mut input, from).unwrap();
+   let (mut rw, dest, need_init) = tunnels[0].new_reply_writer(&mut dr, &mut input, from).unwrap().unwrap();
    assert!(&dest == tunnels[1].me.get_address());
-   tunnels[0].reply_writer_init(&mut rw, &mut dr, &mut input, &mut output).unwrap();
+   assert!(need_init == false);
+   // need init could still be call
+   if thread_rng().gen_weighted_bool(2) {
+     tunnels[0].reply_writer_init(&mut rw, &mut dr, &mut input, &mut output).unwrap();
+   }
 
 
    // write 
