@@ -595,6 +595,29 @@ impl<TT : GenTunnelTraits> TunnelNoRepReadProv<Full<TT>> for FullReadProv<TT> {
     }
   }
 
+  fn can_dest_reader (&mut self, or : &<Full<TT> as TunnelNoRep>::TR) -> bool { 
+    match or.state {
+      TunnelState::TunnelState => {
+        false
+      },
+      TunnelState::QueryOnce => {
+        true
+      },
+      TunnelState::QueryCached => {
+        true
+      },
+      TunnelState::ReplyOnce => {
+        true
+      },
+      TunnelState::ReplyCached => {
+        false
+      },
+      TunnelState::QErrorCached => {
+        false
+      },
+    }
+  }
+
   fn new_dest_reader<R : Read> (&mut self, mut or : <Full<TT> as TunnelNoRep>::TR, r : &mut R) -> Result<Option<<Full<TT> as TunnelNoRep>::DR>> {
     Ok(match or.state {
       TunnelState::TunnelState => {

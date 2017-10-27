@@ -275,6 +275,7 @@ impl<P : Peer> TunnelNoRep for TunnelNope<P> {
 }
 impl<P : Peer> TunnelNoRepReadProv<Self> for TunnelNope<P> {
   fn new_reader (&mut self) -> <Self as TunnelNoRep>::TR { Nope }
+  fn can_dest_reader (&mut self, _ : &<Self as TunnelNoRep>::TR) -> bool { true }
   fn new_dest_reader<R : Read> (&mut self, _ : <Self as TunnelNoRep>::TR, _ : &mut R) -> Result<Option<<Self as TunnelNoRep>::DR>> { Ok(Some(Nope)) }
   fn new_tunnel_read_prov (&self) -> Self {TunnelNope::new()}
 }

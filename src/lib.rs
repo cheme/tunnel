@@ -158,6 +158,8 @@ pub trait TunnelNoRepReadProv<T : TunnelNoRep> {
 
   fn new_tunnel_read_prov (&self) -> Self;
   fn new_reader (&mut self) -> <T as TunnelNoRep>::TR;
+  /// check if we can obtain the dest reader without tunnel context
+  fn can_dest_reader (&mut self, &<T as TunnelNoRep>::TR) -> bool;
   /// same as tunnel dest reader but not mandatory (for instance we do not want to share cache
   /// informations)
   fn new_dest_reader<R : Read> (&mut self, <T as TunnelNoRep>::TR, &mut R) -> Result<Option<<T as TunnelNoRep>::DR>>;
