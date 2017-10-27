@@ -124,7 +124,7 @@ pub trait TunnelReaderExt : ExtRead {
 /// When a tunnel implement multiple trait it has property of all trait ('new_writer' of a
 /// TunnelNoRep if Tunnel trait is also implemented will write necessary info for reply).
 pub trait TunnelNoRep : Sized {
-  type ReadProv : TunnelReadProv<T=Self>;
+  type ReadProv : TunnelNoRepReadProv<Self>;
   /// Peer with their address and their asym shadow scheme
   type P : Peer;
   /// actual writer (tunnel logic using tunnel writer)
@@ -154,17 +154,27 @@ pub trait TunnelNoRep : Sized {
 
 /// Subset of TunelReader for reading without reverence to cache or route provider
 /// Can be use directly with a read stream without accessing a central tunnel impl.
-pub trait TunnelReadProv {
-  type T : TunnelNoRep;
+pub trait TunnelNoRepReadProv<T : TunnelNoRep> {
+
   fn new_tunnel_read_prov (&self) -> Self;
-  fn new_reader (&mut self) -> <Self::T as TunnelNoRep>::TR;
+  fn new_reader (&mut self) -> <T as TunnelNoRep>::TR;
   /// same as tunnel dest reader but not mandatory (for instance we do not want to share cache
   /// informations)
-  fn new_dest_reader<R : Read> (&mut self, <Self::T as TunnelNoRep>::TR, &mut R) -> Result<Option<<Self::T as TunnelNoRep>::DR>>;
+  fn new_dest_reader<R : Read> (&mut self, <T as TunnelNoRep>::TR, &mut R) -> Result<Option<<T as TunnelNoRep>::DR>>;
 }
+pub trait TunnelReadProv<T : Tunnel> : TunnelNoRepReadProv<T> where
+ <T as TunnelNoRep>::TR : TunnelReader<RI=T::RI>,
+ <T as TunnelNoRep>::ReadProv : TunnelReadProv<T>,
+ {
 
+  /// returned first bool to true if reply is possible, second bool is true if reply init is needed
+  fn new_reply_writer<R : Read> (&mut self, &mut T::DR, &mut R) -> Result<(bool,bool,Option<(T::RW, <T::P as Peer>::Address)>)>;
+}
 /// tunnel with reply
-pub trait Tunnel : TunnelNoRep where Self::TR : TunnelReader<RI=Self::RI> {
+pub trait Tunnel : TunnelNoRep where 
+  Self::TR : TunnelReader<RI=Self::RI>,
+  Self::ReadProv : TunnelReadProv<Self>,
+  {
   // reply info info needed to established conn -> TODO type reply info looks useless : we create reply
   // writer from reader which contains it
   type RI : Info; // RI and EI in TunnelError seems useless in this trait except pfor tunnelreader
@@ -182,7 +192,10 @@ pub trait Tunnel : TunnelNoRep where Self::TR : TunnelReader<RI=Self::RI> {
 }
 
 /// tunnel with reply
-pub trait TunnelError : TunnelNoRep where Self::TR : TunnelReaderError<EI=Self::EI> {
+pub trait TunnelError : TunnelNoRep where 
+  Self::TR : TunnelReaderError<EI=Self::EI>,
+  Self::ReadProv : TunnelNoRepReadProv<Self>,
+  {
   // error info info needed to established conn
   type EI : Info;
   type EW : TunnelErrorWriter; // not an extwrite (use reply writer instead if need : error is lighter and content should be include in error writer
@@ -199,9 +212,11 @@ pub trait CacheIdProducer {
 
 /// Tunnel which allow caching, and thus establishing connections
 /// TODO understand need for where condition
-pub trait TunnelManager : Tunnel + CacheIdProducer where Self::RI : RepInfo,
-Self::TR : TunnelReader<RI=Self::RI>
-{
+pub trait TunnelManager : Tunnel + CacheIdProducer where 
+  Self::TR : TunnelReader<RI=Self::RI>,
+  Self::ReadProv : TunnelReadProv<Self>,
+  Self::RI : RepInfo,
+  {
   // Shadow Sym (if established con)
   type SSCW : ExtWrite;
   // Shadow Sym (if established con) aka destread
@@ -226,8 +241,10 @@ Self::TR : TunnelReader<RI=Self::RI>
 }
 
 // TODO need for where ??
-pub trait TunnelManagerError : TunnelError + CacheIdProducer where  Self::EI : Info,
-Self::TR : TunnelReaderError<EI = Self::EI>
+pub trait TunnelManagerError : TunnelError + CacheIdProducer where
+  Self::TR : TunnelReaderError<EI = Self::EI>,
+  Self::ReadProv : TunnelNoRepReadProv<Self>,
+  Self::EI : Info,
 {
 
   fn put_errw(&mut self, Vec<u8>, Self::EW, <Self::P as Peer>::Address) -> Result<()>;

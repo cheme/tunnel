@@ -30,6 +30,7 @@ use super::{
   Peer,
   TunnelReader,
   TunnelReadProv,
+  TunnelNoRepReadProv,
   TunnelReaderError,
   TunnelReaderNoRep,
   TunnelWriterExt,
@@ -122,7 +123,9 @@ pub struct Full<TT : GenTunnelTraits> {
 pub struct FullReadProv<TT : GenTunnelTraits> {
   pub me : TT::P,
   pub limiter_proto_r : TT::LR,
+  pub limiter_proto_w : TT::LW,
   pub sym_prov : TT::SP,
+  pub reply_once_buf_size : usize,
   pub _p : PhantomData<TT>,
 }
 
@@ -498,24 +501,84 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
     FullReadProv {
       me : self.me.clone(),
       limiter_proto_r : self.limiter_proto_r.clone(),
+      limiter_proto_w : self.limiter_proto_w.clone(),
       sym_prov : self.sym_prov.clone(),
+      reply_once_buf_size : self.reply_once_buf_size,
       _p : PhantomData,
     }
   }
 }
-impl<TT : GenTunnelTraits> TunnelReadProv for FullReadProv<TT> {
-  type T = Full<TT>;
+impl<TT : GenTunnelTraits> TunnelReadProv<Full<TT>> for FullReadProv<TT> {
+
+  /// first option level indicate if it is possible for the provider
+  fn new_reply_writer<R : Read> (
+    &mut self, 
+    tr : &mut <Full<TT> as TunnelNoRep>::DR,
+    r : &mut R, 
+    ) -> Result<(bool,bool,Option<(<Full<TT> as Tunnel>::RW, <<Full<TT> as TunnelNoRep>::P as Peer>::Address)>)> {
+    match *tr.origin_read.current_reply_info.as_ref().unwrap_or_else(
+      // TODO return Error instead (when panic removal future refacto)
+      || unimplemented!()
+    ) {
+      MultipleReplyInfo::NoHandling => {
+        return Ok((false,false,None));
+      },
+      MultipleReplyInfo::Route => (),
+      MultipleReplyInfo::CachedRoute(ref v) => return Ok((true,false,None)),
+      _ => unimplemented!(),
+    };
+
+     // warn duplicated code TODO function it
+
+     let mut buf = vec![0;self.reply_once_buf_size];
+     let mut l;
+     // read_end of content
+     while {
+       l = tr.read_from(r, &mut buf[..])?;
+       l != 0
+     } {}
+     tr.origin_read.switch_toreppayload(r)?;
+     let rep;
+     let a;
+     let need_init;
+     {
+//      let mut buf3 = vec![0;1024];   let a3 = tr.read_from(r, &mut buf3[..]).unwrap(); panic!("b : {:?}", &buf3[..a3]); // some 72 wrong or from shad simply
+
+        // TODO see if method facto with proxy
+        let mut inr = CompExtRInner(r, tr);
+
+        let mut ritmp : MultipleReplyInfo<<TT::P as Peer>::Address> = MultipleReplyInfo::RouteReply(Vec::new());
+        ritmp.read_read_info(&mut inr)?;
+        // read add
+        a = bin_decode(&mut inr, Infinite).map_err(|e|BincErr(e))?;
+        rep = if let MultipleReplyInfo::RouteReply(v) = ritmp {
+          // return writer
+          let ssw = CompExtW(self.sym_prov.new_sym_writer(v),self.limiter_proto_w.clone());
+          need_init = true;
+          ReplyWriter::Route{shad : ssw}
+        } else {
+          panic!("missing key for encoding reply"); // TODO transform to error
+        };
+     }
+     Ok((true,need_init,Some((rep,a))))
+ 
+  }
+}
+
+impl<TT : GenTunnelTraits> TunnelNoRepReadProv<Full<TT>> for FullReadProv<TT> {
 
   fn new_tunnel_read_prov (&self) -> Self {
     FullReadProv {
       me : self.me.clone(),
       limiter_proto_r : self.limiter_proto_r.clone(),
+      limiter_proto_w : self.limiter_proto_w.clone(),
       sym_prov : self.sym_prov.clone(),
+      reply_once_buf_size : self.reply_once_buf_size,
       _p : PhantomData,
     }
   }
 
-  fn new_reader (&mut self) -> <Self::T as TunnelNoRep>::TR {
+  fn new_reader (&mut self) -> <Full<TT> as TunnelNoRep>::TR {
     let s = self.me.new_shadr();
     FullR {
       error_code : None,
@@ -532,7 +595,7 @@ impl<TT : GenTunnelTraits> TunnelReadProv for FullReadProv<TT> {
     }
   }
 
-  fn new_dest_reader<R : Read> (&mut self, mut or : <Self::T as TunnelNoRep>::TR, r : &mut R) -> Result<Option<<Self::T as TunnelNoRep>::DR>> {
+  fn new_dest_reader<R : Read> (&mut self, mut or : <Full<TT> as TunnelNoRep>::TR, r : &mut R) -> Result<Option<<Full<TT> as TunnelNoRep>::DR>> {
     Ok(match or.state {
       TunnelState::TunnelState => {
         None
