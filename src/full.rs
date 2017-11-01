@@ -520,7 +520,8 @@ impl<TT : GenTunnelTraits> TunnelReadProv<Full<TT>> for FullReadProv<TT> {
       // TODO return Error instead (when panic removal future refacto)
       || unimplemented!()
     ) {
-      MultipleReplyInfo::NoHandling => {
+      MultipleReplyInfo::NoHandling 
+      | MultipleReplyInfo::RouteReply(..) => {
         return Ok((false,false,None));
       },
       MultipleReplyInfo::Route => (),
@@ -755,18 +756,27 @@ impl<TT : GenTunnelTraits> Tunnel for Full<TT> {
       }))
  
   }
+
+  type RW_INIT = (<TT as GenTunnelTraits>::LR, <TT as GenTunnelTraits>::LW, usize);
+
+  #[inline]
+  fn reply_writer_init_init (&mut self, _ : &mut Self::RW, _ : &mut Self::DR) -> Result<Self::RW_INIT> {
+    let lim_payload = self.limiter_proto_r.clone();
+    let lim_proxy = self.limiter_proto_w.clone();
+    Ok((lim_payload,lim_proxy,self.reply_once_buf_size))
+  }
+
   // TODO consider using plain tr and read_end it (as was done before for new_reply_writer)
-  fn reply_writer_init<R : Read, W : Write> (&mut self, repw : &mut Self::RW, tr : &mut Self::DR, r : &mut R, w : &mut W) -> Result<()> {
+  fn reply_writer_init<R : Read, W : Write> (init_init : Self::RW_INIT, repw: &mut Self::RW, tr : &mut Self::DR, r : &mut R, w : &mut W) -> Result<()> {
+    let (mut lim_payload, mut lim_proxy,reply_once_buf_size) = init_init;
     if let &mut ReplyWriter::Route{..} = repw {
       let mut inr = CompExtRInner(r, tr);
       let state = bin_decode(&mut inr, Infinite).map_err(|e|BincErr(e))?;
       assert!(if let TunnelState::ReplyOnce = state {true} else {false});
       bin_encode(w, &state, Infinite).map_err(|e|BincErr(e))?;
-      let mut lim_payload = self.limiter_proto_r.clone();
-      let mut lim_proxy = self.limiter_proto_w.clone();
       lim_payload.read_header(&mut inr)?;
       lim_proxy.write_header(w)?;
-      let mut buf = vec![0;self.reply_once_buf_size];
+      let mut buf = vec![0;reply_once_buf_size];
         // proxy head
         let mut l;
         while {

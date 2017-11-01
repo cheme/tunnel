@@ -568,7 +568,8 @@ fn reply_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr :
    }).collect();
    assert!(&dest == tunnelsrep[1].me.get_address());
    assert!(need_init == true);
-   tunnel.reply_writer_init(&mut rw, &mut dr, &mut input, &mut output).unwrap();
+   let init_init = tunnel.reply_writer_init_init(&mut rw, &mut dr).unwrap();
+   <Full<TestTunnelTraits<P>>>::reply_writer_init(init_init, &mut rw, &mut dr, &mut input, &mut output).unwrap();
 
 
 
@@ -588,7 +589,8 @@ fn reply_cached_test<P : Peer> (tc : TunnelTestConfig<P>, mut dr :
    assert!(need_init == false);
    // need init could still be call
    if thread_rng().gen_weighted_bool(2) {
-     tunnels[0].reply_writer_init(&mut rw, &mut dr, &mut input, &mut output).unwrap();
+     let init_init = tunnels[0].reply_writer_init_init(&mut rw, &mut dr).unwrap();
+     <Full<TestTunnelTraits<P>>>::reply_writer_init(init_init, &mut rw, &mut dr, &mut input, &mut output).unwrap();
    }
 
 
