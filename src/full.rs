@@ -510,6 +510,13 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
 }
 impl<TT : GenTunnelTraits> TunnelReadProv<Full<TT>> for FullReadProv<TT> {
 
+  #[inline]
+  fn reply_writer_init_init (&mut self) -> Result<Option<<Full<TT> as Tunnel>::RW_INIT>> {
+    let lim_payload = self.limiter_proto_r.clone();
+    let lim_proxy = self.limiter_proto_w.clone();
+    Ok(Some((lim_payload,lim_proxy,self.reply_once_buf_size)))
+  }
+
   /// first option level indicate if it is possible for the provider
   fn new_reply_writer<R : Read> (
     &mut self, 
@@ -596,26 +603,41 @@ impl<TT : GenTunnelTraits> TunnelNoRepReadProv<Full<TT>> for FullReadProv<TT> {
     }
   }
 
-  fn can_dest_reader (&mut self, or : &<Full<TT> as TunnelNoRep>::TR) -> bool { 
-    match or.state {
-      TunnelState::TunnelState => {
-        false
+  fn can_proxy_writer (&mut self, or : &<Full<TT> as TunnelNoRep>::TR) -> bool { 
+   match or.state {
+      TunnelState::TunnelState => false,
+      TunnelState::QueryOnce => true,
+      TunnelState::QueryCached => false,
+      TunnelState::ReplyOnce => true,
+      TunnelState::ReplyCached => false,
+      TunnelState::QErrorCached => false,
+    }
+  }
+  fn new_proxy_writer (&mut self, or : <Full<TT> as TunnelNoRep>::TR) -> Result<Option<(<Full<TT> as TunnelNoRep>::PW, <<Full<TT> as TunnelNoRep>::P as Peer>::Address)>> {
+    let (pfk,a) = match or.state {
+      TunnelState::ReplyOnce => {
+        let key = or.current_reply_info.as_ref().unwrap().get_reply_key().unwrap().clone();
+        let ssw = CompExtW(self.sym_prov.new_sym_writer (key),self.limiter_proto_w.clone());
+        (ProxyFullKind::ReplyOnce(self.limiter_proto_r.clone(),true,ssw,self.limiter_proto_w.clone(),true), or.next_proxy_peer.clone().unwrap())
       },
       TunnelState::QueryOnce => {
-        true
+        (ProxyFullKind::QueryOnce(self.limiter_proto_w.clone()), or.next_proxy_peer.clone().unwrap())
       },
-      TunnelState::QueryCached => {
-        true
-      },
-      TunnelState::ReplyOnce => {
-        true
-      },
-      TunnelState::ReplyCached => {
-        false
-      },
-      TunnelState::QErrorCached => {
-        false
-      },
+      _ => return Ok(None)
+    };
+    Ok(Some((ProxyFull {
+        origin_read : or,
+        kind : pfk,
+    },a)))
+  }
+  fn can_dest_reader (&mut self, or : &<Full<TT> as TunnelNoRep>::TR) -> bool {
+    match or.state {
+      TunnelState::TunnelState => false,
+      TunnelState::QueryOnce => true,
+      TunnelState::QueryCached => true,
+      TunnelState::ReplyOnce => true,
+      TunnelState::ReplyCached => false,
+      TunnelState::QErrorCached => false,
     }
   }
 

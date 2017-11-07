@@ -278,6 +278,8 @@ impl<P : Peer> TunnelNoRepReadProv<Self> for TunnelNope<P> {
   fn can_dest_reader (&mut self, _ : &<Self as TunnelNoRep>::TR) -> bool { true }
   fn new_dest_reader<R : Read> (&mut self, _ : <Self as TunnelNoRep>::TR, _ : &mut R) -> Result<Option<<Self as TunnelNoRep>::DR>> { Ok(Some(Nope)) }
   fn new_tunnel_read_prov (&self) -> Self {TunnelNope::new()}
+  fn can_proxy_writer (&mut self, _ : &<Self as TunnelNoRep>::TR) -> bool { false }
+  fn new_proxy_writer (&mut self, _ : <Self as TunnelNoRep>::TR) -> Result<Option<(<Self as TunnelNoRep>::PW, <<Self as TunnelNoRep>::P as Peer>::Address)>> {panic!("Nope do not implement that")}
 }
 
 /* Tunnel not impl for TunnelNope

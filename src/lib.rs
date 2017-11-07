@@ -145,7 +145,10 @@ pub trait TunnelNoRep : Sized {
   fn new_writer (&mut self, &Self::P) -> (Self::W, <Self::P as Peer>::Address);
   // TODO rewrite with Iterator next peer is first of roote
   fn new_writer_with_route (&mut self, &[&Self::P]) -> Self::W;
-  /// param address is `from` peer address : peer from which we read (used in cacheroute) 
+  /// param address is `from` peer address : peer from which we read (used in cacheroute) TODO for
+  /// mydht usage with cache, the `from` parameter is not fine and should be removed: using from
+  /// will be done at Info implementation level (readstream with access to address when reading),
+  /// otherwhise from will be added in frame !! + method get_cache should return the address
   fn new_proxy_writer (&mut self, Self::TR, &<Self::P as Peer>::Address) -> Result<(Self::PW, <Self::P as Peer>::Address)>;
   fn new_dest_reader<R : Read> (&mut self, Self::TR, &mut R) -> Result<Self::DR>;
 
@@ -163,12 +166,17 @@ pub trait TunnelNoRepReadProv<T : TunnelNoRep> {
   /// same as tunnel dest reader but not mandatory (for instance we do not want to share cache
   /// informations)
   fn new_dest_reader<R : Read> (&mut self, <T as TunnelNoRep>::TR, &mut R) -> Result<Option<<T as TunnelNoRep>::DR>>;
+  fn can_proxy_writer (&mut self, &<T as TunnelNoRep>::TR) -> bool;
+  fn new_proxy_writer (&mut self, <T as TunnelNoRep>::TR) -> Result<Option<(<T as TunnelNoRep>::PW, <<T as TunnelNoRep>::P as Peer>::Address)>>;
 }
 pub trait TunnelReadProv<T : Tunnel> : TunnelNoRepReadProv<T> where
  <T as TunnelNoRep>::TR : TunnelReader<RI=T::RI>,
  <T as TunnelNoRep>::ReadProv : TunnelReadProv<T>,
  {
 
+  /// same as tunnel init of writer if no need for cache (optional), state RW and DR remove because
+  /// in use case it is not call after all content is read
+  fn reply_writer_init_init (&mut self) -> Result<Option<T::RW_INIT>>;
   /// returned first bool to true if reply is possible, second bool is true if reply init is needed
   fn new_reply_writer<R : Read> (&mut self, &mut T::DR, &mut R) -> Result<(bool,bool,Option<(T::RW, <T::P as Peer>::Address)>)>;
 }
