@@ -381,7 +381,7 @@ impl<TT : GenTunnelTraits> TunnelNoRep for Full<TT> {
     let (pfk,a) = match or.state {
       TunnelState::ReplyOnce => {
         let key = or.current_reply_info.as_ref().unwrap().get_reply_key().unwrap().clone();
-        let ssw = CompExtW(self.sym_prov.new_sym_writer (key),self.limiter_proto_w.clone());
+        let ssw = CompExtW(self.sym_prov.new_sym_writer(key),self.limiter_proto_w.clone());
         (ProxyFullKind::ReplyOnce(self.limiter_proto_r.clone(),true,ssw,self.limiter_proto_w.clone(),true), or.next_proxy_peer.clone().unwrap())
       },
       TunnelState::QueryCached => {

@@ -232,7 +232,9 @@ impl<P : Peer> RouteProvider<P> for Nope {
   fn new_reply_route (&mut self, _ : &P) -> Vec<&P> {
     panic!("Placeholder, should not be called");
   }
-
+  fn rand_dest (&mut self) -> &P {
+    panic!("Placeholder, should not be called");
+  }
 }
 
 impl<P : Peer, EI : Info> ErrorProvider<P,EI> for Nope {

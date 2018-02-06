@@ -15,7 +15,6 @@ rand = "~0.3.17"
 bincode = "~0.8.0"
 serde = { version = "~1.0.10", features = ["rc"]}
 serde_derive = "~1.0.10"
-
 [dependencies.readwrite-comp]
 #path = "../readwrite-comp/"
 git = "https://github.com/cheme/readwrite-comp.git"

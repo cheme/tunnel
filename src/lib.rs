@@ -89,6 +89,8 @@ pub trait RouteProvider<P : Peer> {
   /// for bitunnel (arg is still dest our peer address is known to route provider) 
   /// TODO seems useless : rev previous and in bitunnel a route provider is include
   fn new_reply_route (&mut self, &P) -> Vec<&P>;
+  /// return a random peer
+  fn rand_dest (&mut self) -> &P;
 }
 /// Error info vec do not contain origin (start at index one of route)
 pub trait ErrorProvider<P : Peer, EI : Info> {

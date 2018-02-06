@@ -376,6 +376,11 @@ impl<P : Peer> RouteProvider<P> for Rp<P> {
     r[0] = self.4.last().unwrap();
     r
   }
+
+  fn rand_dest (&mut self) -> &P {
+    // untested as this implementation is not random
+    unimplemented!();
+  }
 }
 fn new_reply_route_1<P : Clone> (base : &[P], l : usize, dest : &P) -> Vec<P> {
 
@@ -391,6 +396,10 @@ impl<P : Peer> RouteProvider<P> for SingleRp<P> {
   }
   fn new_reply_route (&mut self, _ : &P) -> Vec<&P> {
       self.0.iter().rev().collect()
+  }
+  fn rand_dest (&mut self) -> &P {
+    // untested as this implementation is not random
+    unimplemented!();
   }
 }
 
