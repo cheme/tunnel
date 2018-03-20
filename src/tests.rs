@@ -77,6 +77,7 @@ pub struct TestSizedWindows;
 pub struct TestSizedWindowsHead;
 impl SizedWindowsParams for TestSizedWindowsHead {
     const INIT_SIZE : usize = 15;
+    const MAX_SIZE : usize = 6000;
     const GROWTH_RATIO : Option<(usize,usize)> = None;
     const WRITE_SIZE : bool = false;
     const SECURE_PAD : bool = false;
@@ -85,6 +86,7 @@ impl SizedWindowsParams for TestSizedWindowsHead {
 impl SizedWindowsParams for TestSizedWindows {
 //    const INIT_SIZE : usize = 45;
     const INIT_SIZE : usize = 15;
+    const MAX_SIZE : usize = 6000;
     const GROWTH_RATIO : Option<(usize,usize)> = Some((3,2));
     const WRITE_SIZE : bool = true;
     const SECURE_PAD : bool = false;
